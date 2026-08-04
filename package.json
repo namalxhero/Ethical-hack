@@ -1,0 +1,13 @@
+{
+  "name": "ethical-hacking-ai",
+  "version": "1.0.0",
+  "description": "Ethical Hacking & Cybersecurity Assistant Bot",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}
+
