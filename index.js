@@ -1,7 +1,9 @@
+// FIXED: Changed "Const" to "const"
 const express = require('express');
 
 const app = express();
-app.use(express.json({ limit: '15mb' }));
+// FIXED: Vercel's maximum serverless payload limit is 4.5MB.
+app.use(express.json({ limit: '4.5mb' }));
 
 app.get('/', (req, res) => {
     res.send(`<!DOCTYPE html>
@@ -47,7 +49,7 @@ app.get('/', (req, res) => {
     </div>
 
     <div id="chat-box">
-        <div class="message ai">System initialized with 3.5 Flash-Lite. Awaiting technical parameters...</div>
+        <div class="message ai">System initialized. Awaiting technical parameters...</div>
     </div>
 
     <div id="input-area">
@@ -105,6 +107,12 @@ app.get('/', (req, res) => {
             let mimeType = null;
 
             if (file) {
+                // Check if file exceeds Vercel 4.5MB Limit client-side
+                if (file.size > 4.5 * 1024 * 1024) {
+                    alert("File is too large! Vercel limits uploads to 4.5MB.");
+                    return;
+                }
+
                 mimeType = file.type || 'text/plain';
                 const base64Full = await toBase64(file);
                 mediaBase64 = base64Full.split(',')[1];
@@ -140,7 +148,7 @@ app.get('/', (req, res) => {
                 localStorage.setItem('stealth_chat_history', chatBox.innerHTML);
 
             } catch (err) {
-                chatBox.innerHTML += \`<div class="message ai" style="color:#ff0000;">Connection lost. Check terminal.</div>`;
+                chatBox.innerHTML += \`<div class="message ai" style="color:#ff0000;">Connection lost. Check terminal.</div>\`;
                 scrollToBottom();
             }
         }
@@ -172,7 +180,7 @@ app.post('/chat', async (req, res) => {
             return res.json({ response: "System Error: API Key missing." });
         }
 
-        // Using gemini-3.5-flash-lite as configured in your app interface
+        // NOTE: Ensure 'gemini-1.5-flash' or your preferred model is correct here
         const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${apiKey}`;
 
         let parts = [];
