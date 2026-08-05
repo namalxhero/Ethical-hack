@@ -11,7 +11,7 @@ app.get('/', (req, res) => {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Stealth Tech AI</title>
     <!-- Marked.js CDN -->
-    <script src="[https://cdn.jsdelivr.net/npm/marked/marked.min.js](https://cdn.jsdelivr.net/npm/marked/marked.min.js)"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
         body { font-family: 'Courier New', Courier, monospace; background: #0a0a0a; color: #00ff00; display: flex; flex-direction: column; height: 100vh; margin: 0; justify-content: space-between; }
         #header { display: flex; justify-content: space-between; align-items: center; padding: 12px 20px; background: #111; border-bottom: 1px solid #333; }
@@ -99,7 +99,7 @@ app.get('/', (req, res) => {
             if (!text && !file) return;
 
             let userHtml = '<div class="message user">';
-            if (text) userHtml += `<div>${escapeHtml(text)}</div>`;
+            if (text) userHtml += \`<div>\${escapeHtml(text)}</div>\`;
 
             let mediaBase64 = null;
             let mimeType = null;
@@ -110,9 +110,9 @@ app.get('/', (req, res) => {
                 mediaBase64 = base64Full.split(',')[1];
 
                 if (mimeType.startsWith('image/')) {
-                    userHtml += `<img src="${base64Full}">`;
+                    userHtml += \`<img src="\${base64Full}">\`;
                 } else {
-                    userHtml += `<div style="font-size:12px; color:#888;">[File: ${file.name}]</div>`;
+                    userHtml += \`<div style="font-size:12px; color:#888;">[File: \${file.name}]</div>\`;
                 }
             }
             userHtml += '</div>';
@@ -132,16 +132,15 @@ app.get('/', (req, res) => {
                 const data = await res.json();
                 
                 const rawResponse = data.response || "No response.";
-                // Render markdown safely using marked
                 const parsedMarkdown = marked.parse(rawResponse);
                 
-                chatBox.innerHTML += `<div class="message ai">${parsedMarkdown}</div>`;
+                chatBox.innerHTML += \`<div class="message ai">\${parsedMarkdown}</div>\`;
                 scrollToBottom();
 
                 localStorage.setItem('stealth_chat_history', chatBox.innerHTML);
 
             } catch (err) {
-                chatBox.innerHTML += `<div class="message ai" style="color:#ff0000;">Connection lost. Check terminal.</div>`;
+                chatBox.innerHTML += \`<div class="message ai" style="color:#ff0000;">Connection lost. Check terminal.</div>\`;
                 scrollToBottom();
             }
         }
@@ -173,7 +172,7 @@ app.post('/chat', async (req, res) => {
             return res.json({ response: "System Error: API Key missing." });
         }
 
-        const url = `[https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=$](https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=$){apiKey}`;
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
 
         let parts = [];
         if (media && mimeType) {
@@ -207,11 +206,26 @@ app.post('/chat', async (req, res) => {
 
         const data = await apiRes.json();
 
-        // Safely check if candidate and text parts exist before reading
-        if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0].text) {
-            return res.json({ response: data.candidates[0].content.parts[0].text });
+        // Safe extraction checking all nested properties without crashing
+        let aiText = null;
+        if (
+            data &&
+            data.candidates &&
+            Array.isArray(data.candidates) &&
+            data.candidates.length > 0 &&
+            data.candidates[0].content &&
+            data.candidates[0].content.parts &&
+            Array.isArray(data.candidates[0].content.parts) &&
+            data.candidates[0].content.parts.length > 0 &&
+            data.candidates[0].content.parts[0].text
+        ) {
+            aiText = data.candidates[0].content.parts[0].text;
+        }
+
+        if (aiText) {
+            return res.json({ response: aiText });
         } else {
-            console.error("API Error Response:", JSON.stringify(data));
+            console.warn("API Blocked or Malformed Response:", JSON.stringify(data));
             return res.json({ response: "System response blocked or failed. Try reformulating the query." });
         }
 
@@ -226,4 +240,3 @@ if (process.env.NODE_ENV !== 'production') {
 }
 
 module.exports = app;
-
