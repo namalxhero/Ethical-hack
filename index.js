@@ -278,7 +278,7 @@ app.post('/chat', async (req, res) => {
             return res.json({ response: "System Error: API Key missing." });
         }
 
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${apiKey}`;
 
         const payload = {
             contents: history, // Pass complete multi-turn conversation history
