@@ -138,7 +138,7 @@ app.get('/', (req, res) => {
             chatBox.scrollTop = chatBox.scrollHeight;
         }
 
-        // Attach Copy Button to every code block in AI messages
+        // Improved Copy Button Logic with Fallback for non-HTTPS/Mobile
         function attachCopyButtons() {
             const preBlocks = document.querySelectorAll('.ai pre');
             preBlocks.forEach((pre) => {
@@ -148,8 +148,11 @@ app.get('/', (req, res) => {
                 btn.className = 'copy-btn';
                 btn.textContent = 'COPY';
                 btn.onclick = function() {
-                    const code = pre.querySelector('code') ? pre.querySelector('code').innerText : pre.innerText;
-                    navigator.clipboard.writeText(code).then(() => {
+                    const codeElement = pre.querySelector('code');
+                    // Use textContent to preserve formatting accurately
+                    let code = codeElement ? codeElement.textContent : pre.textContent.replace('COPY', '').trim();
+                    
+                    const showSuccess = () => {
                         btn.textContent = 'COPIED!';
                         btn.style.background = '#00ff00';
                         btn.style.color = '#000';
@@ -158,9 +161,34 @@ app.get('/', (req, res) => {
                             btn.style.background = '#222';
                             btn.style.color = '#00ff00';
                         }, 2000);
-                    }).catch(err => {
-                        console.error('Failed to copy code: ', err);
-                    });
+                    };
+
+                    const fallbackCopyText = (text) => {
+                        const textArea = document.createElement("textarea");
+                        textArea.value = text;
+                        textArea.style.position = "fixed"; 
+                        textArea.style.opacity = "0";
+                        document.body.appendChild(textArea);
+                        textArea.focus();
+                        textArea.select();
+                        try {
+                            document.execCommand('copy');
+                            showSuccess();
+                        } catch (err) {
+                            console.error('Fallback copy failed: ', err);
+                        }
+                        document.body.removeChild(textArea);
+                    };
+
+                    // Check for modern clipboard API availability
+                    if (navigator.clipboard && window.isSecureContext) {
+                        navigator.clipboard.writeText(code)
+                            .then(showSuccess)
+                            .catch(() => fallbackCopyText(code));
+                    } else {
+                        // Use legacy execCommand for HTTP/unsupported environments
+                        fallbackCopyText(code);
+                    }
                 };
                 pre.appendChild(btn);
             });
