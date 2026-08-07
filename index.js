@@ -2,23 +2,12 @@ const express = require('express');
 const archiver = require('archiver');
 const admin = require('firebase-admin');
 
-// Firebase initialization (Environment Variable එකෙන් හෝ JSON Credentials වලින්)
+// Firebase initialization using Database URL directly (No JSON string issues)
 if (!admin.apps.length) {
     try {
-        // Vercel වලදී environment variable එකක් හරහා service account එක දෙන එක තමයි ලේසිම
-        const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT) : null;
-        
-        if (serviceAccount) {
-            admin.initializeApp({
-                credential: admin.credential.cert(serviceAccount),
-                databaseURL: process.env.FIREBASE_DATABASE_URL
-            });
-        } else {
-            // Local test කරනකොට හෝ default setup එකට
-            admin.initializeApp({
-                databaseURL: process.env.FIREBASE_DATABASE_URL
-            });
-        }
+        admin.initializeApp({
+            databaseURL: process.env.FIREBASE_DATABASE_URL
+        });
     } catch (e) {
         console.error("Firebase init error:", e.message);
     }
@@ -97,7 +86,6 @@ app.get('/', (req, res) => {
         }
 
         document.addEventListener("DOMContentLoaded", async () => {
-            // Load history from Firebase Database via backend API
             try {
                 const res = await fetch('/get-history?clientId=' + clientId);
                 const data = await res.json();
@@ -145,7 +133,6 @@ app.get('/', (req, res) => {
 
             if (!text && !file) return;
 
-            // Handle /zip command
             if (text.startsWith('/zip ')) {
                 const zipArgs = text.substring(5).trim();
                 const firstSpace = zipArgs.indexOf(' ');
@@ -189,8 +176,6 @@ app.get('/', (req, res) => {
                         chatBox.innerHTML += \`<div class="message ai" style="color:#ff0000;">Failed to generate ZIP.</div>\`;
                     }
                     scrollToBottom();
-                    
-                    // Sync HTML state to DB
                     await saveHtmlToDB(chatBox.innerHTML);
                 } catch (e) {
                     chatBox.innerHTML += \`<div class="message ai" style="color:#ff0000;">ZIP Error: \${e.message}</div>\`;
@@ -238,7 +223,6 @@ app.get('/', (req, res) => {
                 chatBox.innerHTML += \`<div class="message ai">\${parsedMarkdown}</div>\`;
                 scrollToBottom();
 
-                // Sync HTML state to DB
                 await saveHtmlToDB(chatBox.innerHTML);
 
             } catch (err) {
@@ -335,7 +319,6 @@ app.post('/chat', async (req, res) => {
 
         const userKey = clientId || 'default_user';
         
-        // Fetch existing history array from Firebase for context building
         let dbHistory = [];
         if (db) {
             const snapshot = await db.ref('history/' + userKey).once('value');
@@ -387,7 +370,6 @@ app.post('/chat', async (req, res) => {
         if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0].text) {
             const aiResponseText = data.candidates[0].content.parts[0].text;
 
-            // Append new turns to history and save back to Firebase Database
             dbHistory.push({
                 role: 'user',
                 parts: currentParts
@@ -419,3 +401,4 @@ if (process.env.NODE_ENV !== 'production') {
 }
 
 module.exports = app;
+
