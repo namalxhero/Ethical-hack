@@ -26,11 +26,14 @@ app.get('/', (req, res) => {
         .user { background: #222; align-self: flex-end; color: #fff; border: 1px solid #444; }
         .ai { background: #111; align-self: flex-start; color: #00ff00; border: 1px solid #00ff00; }
         
-        .ai pre { background: #000000; padding: 12px; border-radius: 4px; overflow-x: auto; color: #ff0055; border: 1px solid #333; margin: 10px 0; white-space: pre-wrap; word-wrap: break-word; }
+        .ai pre { position: relative; background: #000000; padding: 12px; padding-top: 30px; border-radius: 4px; overflow-x: auto; color: #ff0055; border: 1px solid #333; margin: 10px 0; white-space: pre-wrap; word-wrap: break-word; }
         .ai code { font-family: 'Courier New', Courier, monospace; background: #111; padding: 2px 4px; border-radius: 3px; color: #ff0055; }
         .ai pre code { background: transparent; padding: 0; color: #ff0055; }
         .ai p { margin: 0 0 10px 0; }
         .ai p:last-child { margin-bottom: 0; }
+
+        .copy-code-btn { position: absolute; top: 6px; right: 6px; background: #222; color: #00ff00; border: 1px solid #00ff00; border-radius: 3px; padding: 2px 8px; font-size: 10px; cursor: pointer; font-family: monospace; }
+        .copy-code-btn:hover { background: #00ff00; color: #000; }
 
         .message img, .message video { max-width: 200px; border-radius: 4px; margin-top: 5px; display: block; }
         #input-area { display: flex; padding: 15px; background: #111; border-top: 1px solid #333; gap: 10px; align-items: center; }
@@ -76,6 +79,7 @@ app.get('/', (req, res) => {
                 const data = await res.json();
                 if (data.html) {
                     document.getElementById('chat-box').innerHTML = data.html;
+                    addCopyButtons(document.getElementById('chat-box'));
                     scrollToBottom();
                 }
             } catch (e) {
@@ -108,6 +112,32 @@ app.get('/', (req, res) => {
         function scrollToBottom() {
             const chatBox = document.getElementById('chat-box');
             chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        function addCopyButtons(container) {
+            container.querySelectorAll('pre').forEach(pre => {
+                if (pre.querySelector('.copy-code-btn')) return;
+                
+                const btn = document.createElement('button');
+                btn.className = 'copy-code-btn';
+                btn.textContent = 'Copy';
+                
+                btn.onclick = () => {
+                    const codeElement = pre.querySelector('code') || pre;
+                    // remove button text copy safeguard if needed, but innerText handles it cleanly
+                    const textToCopy = codeElement.innerText;
+                    navigator.clipboard.writeText(textToCopy).then(() => {
+                        btn.textContent = 'Copied!';
+                        setTimeout(() => {
+                            btn.textContent = 'Copy';
+                        }, 2000);
+                    }).catch(err => {
+                        console.error('Failed to copy text: ', err);
+                    });
+                };
+                
+                pre.appendChild(btn);
+            });
         }
 
         async function sendMessage() {
@@ -155,7 +185,12 @@ app.get('/', (req, res) => {
                 const rawResponse = data.response || "No response received.";
                 const parsedMarkdown = marked.parse(rawResponse);
                 
-                chatBox.innerHTML += \`<div class="message ai">\${parsedMarkdown}</div>\`;
+                const aiMessageDiv = document.createElement('div');
+                aiMessageDiv.className = 'message ai';
+                aiMessageDiv.innerHTML = parsedMarkdown;
+                
+                addCopyButtons(aiMessageDiv);
+                chatBox.appendChild(aiMessageDiv);
                 scrollToBottom();
 
                 await saveHtmlState(chatBox.innerHTML);
