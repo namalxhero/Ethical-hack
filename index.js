@@ -1,22 +1,11 @@
 const express = require('express');
 const archiver = require('archiver');
-const admin = require('firebase-admin');
-
-// Firebase initialization using Database URL directly (No JSON string issues)
-if (!admin.apps.length) {
-    try {
-        admin.initializeApp({
-            databaseURL: process.env.FIREBASE_DATABASE_URL
-        });
-    } catch (e) {
-        console.error("Firebase init error:", e.message);
-    }
-}
-
-const db = admin.apps.length ? admin.database() : null;
 
 const app = express();
 app.use(express.json({ limit: '15mb' }));
+
+// In-memory fallback map to ensure zero serverless crashes
+const memoryDatabase = {};
 
 app.get('/', (req, res) => {
     res.send(`<!DOCTYPE html>
@@ -24,8 +13,7 @@ app.get('/', (req, res) => {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Stealth Tech AI - Firebase Synced</title>
-    <!-- Marked.js CDN for Markdown Parsing -->
+    <title>Stealth Tech AI - Stable Edition</title>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
         body { font-family: 'Courier New', Courier, monospace; background: #0a0a0a; color: #00ff00; display: flex; flex-direction: column; height: 100vh; margin: 0; justify-content: space-between; }
@@ -40,7 +28,6 @@ app.get('/', (req, res) => {
         .user { background: #222; align-self: flex-end; color: #fff; border: 1px solid #444; }
         .ai { background: #111; align-self: flex-start; color: #00ff00; border: 1px solid #00ff00; }
         
-        /* Proper Markdown Code Block Styling */
         .ai pre { background: #000000; padding: 12px; border-radius: 4px; overflow-x: auto; color: #ff0055; border: 1px solid #333; margin: 10px 0; white-space: pre-wrap; word-wrap: break-word; }
         .ai code { font-family: 'Courier New', Courier, monospace; background: #111; padding: 2px 4px; border-radius: 3px; color: #ff0055; }
         .ai pre code { background: transparent; padding: 0; color: #ff0055; }
@@ -59,15 +46,15 @@ app.get('/', (req, res) => {
 </head>
 <body>
     <div id="header">
-        <h2>⚡ Stealth Tech AI [Cloud DB]</h2>
+        <h2>⚡ Stealth Tech AI</h2>
         <div class="header-right">
-            <span id="session-display" class="session-badge">DB: Connected</span>
+            <span id="session-display" class="session-badge">Status: Online</span>
             <button class="new-chat-btn" onclick="startNewChat()">[ Reset ]</button>
         </div>
     </div>
 
     <div id="chat-box">
-        <div class="message ai">System synchronized with Firebase Database.<br>- Type normally to chat.<br>- Type <b>/zip [filename] [content]</b> to generate a zip file.</div>
+        <div class="message ai">System online and stable.<br>- Type normally to chat.<br>- Type <b>/zip [filename] [content]</b> to generate a zip file.</div>
     </div>
 
     <div id="input-area">
@@ -94,17 +81,18 @@ app.get('/', (req, res) => {
                     scrollToBottom();
                 }
             } catch (e) {
-                console.error("Failed to load history from DB");
+                console.error("Failed to load history");
             }
         });
 
         async function startNewChat() {
-            if (confirm("Clear cloud memory and start fresh?")) {
+            if (confirm("Clear session and start fresh?")) {
                 await fetch('/clear', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ clientId: clientId })
                 });
+                localStorage.clear();
                 location.reload();
             }
         }
@@ -176,7 +164,7 @@ app.get('/', (req, res) => {
                         chatBox.innerHTML += \`<div class="message ai" style="color:#ff0000;">Failed to generate ZIP.</div>\`;
                     }
                     scrollToBottom();
-                    await saveHtmlToDB(chatBox.innerHTML);
+                    await saveHtmlState(chatBox.innerHTML);
                 } catch (e) {
                     chatBox.innerHTML += \`<div class="message ai" style="color:#ff0000;">ZIP Error: \${e.message}</div>\`;
                     scrollToBottom();
@@ -213,7 +201,7 @@ app.get('/', (req, res) => {
                 const res = await fetch('/chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: text, media: mediaBase64, mimeType: mimeType, clientId: clientId, currentHtml: chatBox.innerHTML })
+                    body: JSON.stringify({ message: text, media: mediaBase64, mimeType: mimeType, clientId: clientId })
                 });
                 const data = await res.json();
                 
@@ -223,7 +211,7 @@ app.get('/', (req, res) => {
                 chatBox.innerHTML += \`<div class="message ai">\${parsedMarkdown}</div>\`;
                 scrollToBottom();
 
-                await saveHtmlToDB(chatBox.innerHTML);
+                await saveHtmlState(chatBox.innerHTML);
 
             } catch (err) {
                 chatBox.innerHTML += \`<div class="message ai" style="color:#ff0000;">Connection lost. Check terminal.</div>\`;
@@ -231,7 +219,7 @@ app.get('/', (req, res) => {
             }
         }
 
-        async function saveHtmlToDB(htmlContent) {
+        async function saveHtmlState(htmlContent) {
             await fetch('/save-html', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -276,31 +264,25 @@ app.post('/make-zip', (req, res) => {
     }
 });
 
-app.get('/get-history', async (req, res) => {
+app.get('/get-history', (req, res) => {
     const { clientId } = req.query;
-    if (!clientId || !db) return res.json({ html: null });
-
-    try {
-        const snapshot = await db.ref('chats/' + clientId).once('value');
-        const data = snapshot.val();
-        res.json({ html: data ? data.html : null });
-    } catch (e) {
-        res.json({ html: null });
-    }
+    if (!clientId) return res.json({ html: null });
+    res.json({ html: memoryDatabase['chat_' + clientId] || null });
 });
 
-app.post('/save-html', async (req, res) => {
+app.post('/save-html', (req, res) => {
     const { clientId, html } = req.body;
-    if (clientId && html && db) {
-        await db.ref('chats/' + clientId).set({ html: html, updatedAt: Date.now() });
+    if (clientId && html) {
+        memoryDatabase['chat_' + clientId] = html;
     }
     res.json({ status: 'saved' });
 });
 
-app.post('/clear', async (req, res) => {
+app.post('/clear', (req, res) => {
     const { clientId } = req.body;
-    if (clientId && db) {
-        await db.ref('chats/' + clientId).remove();
+    if (clientId) {
+        delete memoryDatabase['chat_' + clientId];
+        delete memoryDatabase['history_' + clientId];
     }
     res.json({ status: 'cleared' });
 });
@@ -319,13 +301,10 @@ app.post('/chat', async (req, res) => {
 
         const userKey = clientId || 'default_user';
         
-        let dbHistory = [];
-        if (db) {
-            const snapshot = await db.ref('history/' + userKey).once('value');
-            if (snapshot.exists()) {
-                dbHistory = snapshot.val();
-            }
+        if (!memoryDatabase['history_' + userKey]) {
+            memoryDatabase['history_' + userKey] = [];
         }
+        let userHistory = memoryDatabase['history_' + userKey];
 
         let currentParts = [];
         if (media && mimeType) {
@@ -338,7 +317,7 @@ app.post('/chat', async (req, res) => {
         }
         currentParts.push({ text: message || "Analyze." });
 
-        let contentsPayload = [...dbHistory];
+        let contentsPayload = [...userHistory];
         contentsPayload.push({
             role: 'user',
             parts: currentParts
@@ -370,18 +349,14 @@ app.post('/chat', async (req, res) => {
         if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0].text) {
             const aiResponseText = data.candidates[0].content.parts[0].text;
 
-            dbHistory.push({
+            userHistory.push({
                 role: 'user',
                 parts: currentParts
             });
-            dbHistory.push({
+            userHistory.push({
                 role: 'model',
                 parts: [{ text: aiResponseText }]
             });
-
-            if (db) {
-                await db.ref('history/' + userKey).set(dbHistory);
-            }
 
             return res.json({ response: aiResponseText });
         } else {
