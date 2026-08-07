@@ -1,10 +1,8 @@
 const express = require('express');
-const archiver = require('archiver');
 
 const app = express();
 app.use(express.json({ limit: '15mb' }));
 
-// In-memory fallback map to ensure zero serverless crashes
 const memoryDatabase = {};
 
 app.get('/', (req, res) => {
@@ -13,7 +11,7 @@ app.get('/', (req, res) => {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Stealth Tech AI - Stable Edition</title>
+    <title>Stealth Tech AI - Ultra Stable</title>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
         body { font-family: 'Courier New', Courier, monospace; background: #0a0a0a; color: #00ff00; display: flex; flex-direction: column; height: 100vh; margin: 0; justify-content: space-between; }
@@ -54,7 +52,7 @@ app.get('/', (req, res) => {
     </div>
 
     <div id="chat-box">
-        <div class="message ai">System online and stable.<br>- Type normally to chat.<br>- Type <b>/zip [filename] [content]</b> to generate a zip file.</div>
+        <div class="message ai">System online.<br>- Type normally to chat.</div>
     </div>
 
     <div id="input-area">
@@ -120,57 +118,6 @@ app.get('/', (req, res) => {
             const file = fileInput.files[0];
 
             if (!text && !file) return;
-
-            if (text.startsWith('/zip ')) {
-                const zipArgs = text.substring(5).trim();
-                const firstSpace = zipArgs.indexOf(' ');
-                let zipFileName = 'archive.zip';
-                let zipContent = 'Default content';
-
-                if (firstSpace !== -1) {
-                    zipFileName = zipArgs.substring(0, firstSpace).trim();
-                    zipContent = zipArgs.substring(firstSpace + 1).trim();
-                    if (!zipFileName.endsWith('.zip')) {
-                        zipFileName += '.zip';
-                    }
-                } else if (zipArgs.length > 0) {
-                    zipFileName = zipArgs + '.zip';
-                }
-
-                let userMsg = \`<div class="message user">\${escapeHtml(text)}</div>\`;
-                chatBox.innerHTML += userMsg;
-                scrollToBottom();
-                input.value = '';
-
-                try {
-                    const res = await fetch('/make-zip', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ filename: zipFileName, content: zipContent })
-                    });
-                    
-                    if (res.ok) {
-                        const blob = await res.blob();
-                        const downloadUrl = window.URL.createObjectURL(blob);
-                        const a = document.createElement('a');
-                        a.href = downloadUrl;
-                        a.download = zipFileName;
-                        document.body.appendChild(a);
-                        a.click();
-                        a.remove();
-
-                        chatBox.innerHTML += \`<div class="message ai">ZIP archive generated successfully: <b>\${zipFileName}</b></div>\`;
-                    } else {
-                        chatBox.innerHTML += \`<div class="message ai" style="color:#ff0000;">Failed to generate ZIP.</div>\`;
-                    }
-                    scrollToBottom();
-                    await saveHtmlState(chatBox.innerHTML);
-                } catch (e) {
-                    chatBox.innerHTML += \`<div class="message ai" style="color:#ff0000;">ZIP Error: \${e.message}</div>\`;
-                    scrollToBottom();
-                }
-                return;
-            }
 
             let userHtml = '<div class="message user">';
             if (text) userHtml += \`<div>\${escapeHtml(text)}</div>\`;
@@ -240,28 +187,6 @@ app.get('/', (req, res) => {
     </script>
 </body>
 </html>`);
-});
-
-app.post('/make-zip', (req, res) => {
-    try {
-        const { filename, content } = req.body;
-        const zipName = filename || 'archive.zip';
-        const fileContent = content || 'Generated content';
-
-        res.setHeader('Content-Type', 'application/zip');
-        res.setHeader('Content-Disposition', \`attachment; filename="\${zipName}"\`);
-
-        const archive = archiver('zip', { zlib: { level: 9 } });
-        archive.on('error', (err) => {
-            res.status(500).send({ error: err.message });
-        });
-
-        archive.pipe(res);
-        archive.append(fileContent, { name: 'payload.txt' });
-        archive.finalize();
-    } catch (e) {
-        res.status(500).send({ error: e.message });
-    }
 });
 
 app.get('/get-history', (req, res) => {
