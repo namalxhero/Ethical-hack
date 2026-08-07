@@ -1,24 +1,12 @@
 const express = require('express');
+const serverless = require('serverless-http');
 const app = express();
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-// Expanded Memory Database (දින 7ක් දක්වා මතකය තබා ගනී)
+// Memory Database (Vercel මත මෙය తాత్కాలික වේ)
 const memoryDatabase = {};
-const SESSION_TTL = 7 * 24 * 60 * 60 * 1000; 
-
-function cleanupMemory() {
-    const now = Date.now();
-    for (const key in memoryDatabase) {
-        if (memoryDatabase[key] && memoryDatabase[key].timestamp) {
-            if (now - memoryDatabase[key].timestamp > SESSION_TTL) {
-                delete memoryDatabase[key];
-            }
-        }
-    }
-}
-setInterval(cleanupMemory, 60 * 60 * 1000);
 
 app.get('/', (req, res) => {
     res.send(`<!DOCTYPE html>
@@ -126,7 +114,6 @@ app.get('/', (req, res) => {
             chatBox.scrollTop = chatBox.scrollHeight;
         }
 
-        // 100% ක්‍රියාත්මක වන ප්‍රබල Copy Mechanism එක (Fallback method සමඟ)
         function addCopyButtons(container) {
             container.querySelectorAll('pre').forEach(pre => {
                 if (pre.querySelector('.copy-code-btn')) return;
@@ -156,7 +143,7 @@ app.get('/', (req, res) => {
         function fallbackCopy(text, btn) {
             const textarea = document.createElement('textarea');
             textarea.value = text;
-            textarea.style.position = 'fixed'; // Avoid scrolling to bottom
+            textarea.style.position = 'fixed';
             document.body.appendChild(textarea);
             textarea.focus();
             textarea.select();
@@ -352,7 +339,6 @@ app.post('/chat', async (req, res) => {
                 parts: [{ text: aiResponseText }]
             });
 
-            // වැඩි මතකයක් රඳවා ගැනීමට හಿಸ್ಟරි සීමාව පණිවිඩ 100 දක්වා ඉහළ නංවා ඇත
             if (userHistory.length > 100) {
                 userHistory.splice(0, 4);
             }
@@ -374,4 +360,6 @@ if (process.env.NODE_ENV !== 'production') {
     app.listen(3000, () => console.log('Stealth AI Server running on port 3000'));
 }
 
-module.exports = app;
+// Vercel සඳහා serverless-http හරහා Export කිරීම
+module.exports = serverless(app);
+
