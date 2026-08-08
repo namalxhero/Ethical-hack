@@ -298,7 +298,7 @@ app.post('/chat', async (req, res) => {
         };
 
         // ⚡ API Update - Using the latest 2.0 Flash Lite
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite-preview-02-05:generateContent?key=${apiKey}`;
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite-:generateContent?key=${apiKey}`;
         
         let apiRes = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
         let data = await apiRes.json();
