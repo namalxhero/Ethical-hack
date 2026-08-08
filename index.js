@@ -299,7 +299,6 @@ app.post('/chat', async (req, res) => {
 
         let contentsPayload = [...userHistory, { role: 'user', parts: currentParts }];
         
-        // Code-level rule: Payload එකට Google Search Tool එක ඇතුළත් කිරීම මඟින් Real-time / Latest තොරතුරු ස්වයංක්‍රීයව අලුත් කරගැනීමේ හැකියාව (Auto-updating info rule) ලබා දී ඇත.
         let payload = { 
             contents: contentsPayload,
             tools: [{ googleSearch: {} }] 
@@ -324,9 +323,15 @@ app.post('/chat', async (req, res) => {
         let data = await apiRes.json();
 
         let aiResponseText = "No response generated.";
-        if (data.candidates?.[0]?.content?.parts) {
+
+        // API එකෙන් Error එකක් ආවොත් ඒක හරියටම අල්ලාගෙන පෙන්වීමට සකස් කරන ලදී
+        if (data.error) {
+            aiResponseText = "API Error: " + data.error.message;
+        } else if (data.candidates?.[0]?.content?.parts) {
             const textParts = data.candidates[0].content.parts.filter(p => p.text).map(p => p.text);
-            if (textParts.length > 0) aiResponseText = textParts.join("\n");
+            if (textParts.length > 0) {
+                aiResponseText = textParts.join("\n");
+            }
         }
 
         let newHistory = [...userHistory, { role: 'user', parts: currentParts }];
