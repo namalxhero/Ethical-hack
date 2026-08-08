@@ -106,7 +106,7 @@ app.get('/', (req, res) => {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Stealth Tech AI - No Key Repeat</title>
+    <title>Stealth Tech AI - Permanent Key Edition</title>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
         body { font-family: 'Courier New', Courier, monospace; background: #050505; color: #00ff00; display: flex; flex-direction: column; height: 100vh; margin: 0; justify-content: space-between; }
@@ -139,7 +139,7 @@ app.get('/', (req, res) => {
 </head>
 <body>
     <div id="header">
-        <h2>⚡ Stealth Tech AI [No Key Repeat]</h2>
+        <h2>⚡ Stealth Tech AI [Permanent Key]</h2>
         <div class="header-right">
             <span id="session-display" class="session-badge">Status: Secure</span>
             <button class="new-chat-btn" onclick="startNewChat()">[ Reset ]</button>
@@ -147,7 +147,7 @@ app.get('/', (req, res) => {
     </div>
 
     <div id="chat-box">
-        <div class="message ai">System initialized successfully.<br>- Admin key cached in browser session.</div>
+        <div class="message ai">System initialized successfully.<br>- Admin key cache active. No repeat prompts.</div>
     </div>
 
     <div id="input-area">
@@ -163,6 +163,15 @@ app.get('/', (req, res) => {
         if (!clientId) {
             clientId = 'client_' + Math.random().toString(36).substring(2, 9) + Date.now().toString(36);
             localStorage.setItem('stealth_client_id', clientId);
+        }
+
+        // Check and prompt for Admin Key only once on load if missing
+        let adminKey = localStorage.getItem('stealth_admin_key');
+        if (!adminKey) {
+            adminKey = prompt("Enter Admin Secret Key for authorization (Saved permanently for this browser):");
+            if (adminKey) {
+                localStorage.setItem('stealth_admin_key', adminKey);
+            }
         }
 
         document.addEventListener("DOMContentLoaded", async () => {
@@ -263,13 +272,8 @@ app.get('/', (req, res) => {
 
             if (!text && !file) return;
 
-            // Check if adminKey is already saved in localStorage, if not prompt once
-            let adminKey = localStorage.getItem('stealth_admin_key');
-            if (!adminKey) {
-                adminKey = prompt("Enter Admin Secret Key for authorization (Saved for this browser session):");
-                if (!adminKey) return;
-                localStorage.setItem('stealth_admin_key', adminKey);
-            }
+            // Fetch stored key
+            let currentAdminKey = localStorage.getItem('stealth_admin_key') || "";
 
             let userHtml = '<div class="message user">';
             if (text) userHtml += '<div>' + escapeHtml(text) + '</div>';
@@ -300,14 +304,9 @@ app.get('/', (req, res) => {
                 const res = await fetch('/chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: text, media: mediaBase64, mimeType: mimeType, clientId: clientId, adminKey: adminKey })
+                    body: JSON.stringify({ message: text, media: mediaBase64, mimeType: mimeType, clientId: clientId, adminKey: currentAdminKey })
                 });
                 const data = await res.json();
-
-                // If key is wrong, clear saved key so it prompts again next time
-                if (data.response && data.response.includes("Unauthorized")) {
-                    localStorage.removeItem('stealth_admin_key');
-                }
 
                 const rawResponse = data.response || "No response received.";
                 const parsedMarkdown = marked.parse(rawResponse);
@@ -465,7 +464,7 @@ app.post('/chat', async (req, res) => {
             parts: currentParts
         });
 
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${apiKey}`;
 
         const tools = [{
             functionDeclarations: [
@@ -607,4 +606,3 @@ if (process.env.NODE_ENV !== 'production') {
 }
 
 module.exports = app;
-
