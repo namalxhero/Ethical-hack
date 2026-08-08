@@ -424,7 +424,6 @@ app.post('/chat', async (req, res) => {
             data = await apiRes.json();
         }
 
-        // ⚡ FIXED: Robust text extraction so it never shows blank or just "Process completed"
         let aiResponseText = "No response generated.";
         if (data.candidates?.[0]?.content?.parts) {
             const textParts = data.candidates[0].content.parts.filter(p => p.text).map(p => p.text);
@@ -433,11 +432,16 @@ app.post('/chat', async (req, res) => {
             }
         }
 
-        const safeHistoryText = userMessage || "[User uploaded a media file]";
-        userHistory.push({ role: 'user', parts: [{ text: safeHistoryText }] });
-        userHistory.push({ role: 'model', parts: [{ text: aiResponseText }] });
+        // Fix tool memory persistence so it remembers tool actions in subsequent turns
+        contentsPayload.push({ role: 'model', parts: [{ text: aiResponseText }] });
+        userHistory = contentsPayload;
 
-        if (userHistory.length > 50) userHistory.splice(0, 4);
+        if (userHistory.length > 50) {
+            userHistory = userHistory.slice(userHistory.length - 50);
+        }
+        while (userHistory.length > 0 && userHistory[0].role !== 'user') {
+            userHistory.shift();
+        }
 
         localMemory.set(userKey, userHistory);
         if (db) {
@@ -454,4 +458,3 @@ app.post('/chat', async (req, res) => {
 
 if (process.env.NODE_ENV !== 'production') { app.listen(3000, () => console.log('Server running on port 3000')); }
 module.exports = app;
-
