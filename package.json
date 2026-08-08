@@ -1,13 +1,14 @@
 {
-  "name": "ethical-hacking-ai",
+  "name": "stealth-tech-ai",
   "version": "1.0.0",
-  "description": "Ethical Hacking & Cybersecurity Assistant Bot",
+  "description": "Stealth Tech AI with Firebase & Express",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
     "express": "^4.19.2",
+    "firebase-admin": "^12.0.0",
     "serverless-http": "^3.2.0"
   }
 }
