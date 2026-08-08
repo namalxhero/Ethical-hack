@@ -1,22 +1,29 @@
 const express = require('express');
 const admin = require('firebase-admin');
 const { findTopic, findErrorFix } = require('./data.js');
+const { exec } = require('child_process');
 
 const app = express();
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-// ------------------------------------------------------------
-// Fallback In-Memory Storage (Fixes Memory Forgetting Issues)
-// ------------------------------------------------------------
 const localMemory = new Map();
 
-// ------------------------------------------------------------
-// GitHub Functions & Config (Fully Fixed & Expanded)
-// ------------------------------------------------------------
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 const ADMIN_SECRET_KEY = process.env.ADMIN_SECRET_KEY;
+
+function executeTerminalCommand(command) {
+    return new Promise((resolve) => {
+        exec(command, (error, stdout, stderr) => {
+            if (error) {
+                resolve({ success: false, error: error.message, stderr });
+                return;
+            }
+            resolve({ success: true, output: stdout || stderr });
+        });
+    });
+}
 
 async function createGithubRepo(repoName, isPrivate = false, description = "") {
     const url = "https://api.github.com/user/repos";
@@ -39,7 +46,6 @@ async function updateGithubFile(owner, repo, filePath, newContent, commitMessage
     const url = `https://api.github.com/repos/${owner}/${repo}/contents/${filePath}`;
     let sha;
     
-    // First, check if file exists to get the SHA (needed for updating)
     const getRes = await fetch(url, { headers: { Authorization: `token ${GITHUB_TOKEN}` } });
     if (getRes.status === 200) {
         const fileData = await getRes.json();
@@ -50,7 +56,7 @@ async function updateGithubFile(owner, repo, filePath, newContent, commitMessage
         message: commitMessage,
         content: Buffer.from(newContent).toString("base64"),
     };
-    if (sha) body.sha = sha; // Append sha if updating existing file
+    if (sha) body.sha = sha;
 
     const putRes = await fetch(url, {
         method: "PUT",
@@ -90,9 +96,6 @@ async function deleteGithubRepo(owner, repo) {
     return res.status === 204 ? { success: true, message: "Repository deleted." } : { success: false, error: "Failed. Ensure token has 'delete_repo' scope." };
 }
 
-// ------------------------------------------------------------
-// Firebase Initialization
-// ------------------------------------------------------------
 function getDb() {
     if (!admin.apps.length) {
         try {
@@ -107,9 +110,6 @@ function getDb() {
     return admin.apps.length ? admin.firestore() : null;
 }
 
-// ------------------------------------------------------------
-// Frontend HTML
-// ------------------------------------------------------------
 app.get('/', (req, res) => {
     res.setHeader('Content-Type', 'text/html');
     res.status(200).send(`<!DOCTYPE html>
@@ -124,7 +124,6 @@ app.get('/', (req, res) => {
         #header { display: flex; justify-content: space-between; align-items: center; padding: 12px 20px; background: #0a0a0a; border-bottom: 1px solid #222; }
         #header h2 { margin: 0; font-size: 16px; color: #00ff00; text-shadow: 0 0 8px #00ff00; }
         .header-right { display: flex; gap: 10px; align-items: center; }
-        .session-badge { font-size: 12px; color: #00ff00; background: #001100; padding: 4px 8px; border: 1px solid #00ff00; border-radius: 4px; }
         .new-chat-btn { background: #111; color: #00ff00; border: 1px solid #00ff00; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 12px; }
         .new-chat-btn:hover { background: #00ff00; color: #000; }
         #chat-box { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 12px; }
@@ -148,21 +147,21 @@ app.get('/', (req, res) => {
 </head>
 <body>
     <div id="header">
-        <h2>⚡ Stealth Tech AI [Fully Fixed Edition]</h2>
+        <h2>⚡ Stealth Tech AI [Fully Fixed]</h2>
         <div class="header-right">
             <button class="new-chat-btn" onclick="startNewChat()">[ Reset Context ]</button>
         </div>
     </div>
 
     <div id="chat-box">
-        <div class="message ai">System Online. GitHub tools (Create, Upload, Edit, Delete) and Memory fully restored.</div>
+        <div class="message ai">System Online. Ready for your commands.</div>
     </div>
 
     <div id="input-area">
         <label for="media-file" class="file-btn">📎</label>
         <input type="file" id="media-file" accept="image/*,video/*,.txt,.py,.js,.log,.json" onchange="showFileName()">
         <span id="file-name"></span>
-        <input type="text" id="user-input" placeholder="Type message or ask to manage GitHub..." onkeypress="if(event.key === 'Enter') sendMessage()">
+        <input type="text" id="user-input" placeholder="Type message..." onkeypress="if(event.key === 'Enter') sendMessage()">
         <button class="send-btn" onclick="sendMessage()">EXEC</button>
     </div>
 
@@ -205,7 +204,6 @@ app.get('/', (req, res) => {
             chatBox.scrollTop = chatBox.scrollHeight;
         }
 
-        // --- FIXED COPY BUTTON LOGIC ---
         function addCopyButtons(container) {
             container.querySelectorAll('pre').forEach(pre => {
                 if (pre.querySelector('.copy-code-btn')) return;
@@ -216,7 +214,7 @@ app.get('/', (req, res) => {
                 btn.onclick = () => {
                     const clone = pre.cloneNode(true);
                     const removeBtn = clone.querySelector('.copy-code-btn');
-                    if (removeBtn) removeBtn.remove(); // Remove button text from copy
+                    if (removeBtn) removeBtn.remove();
                     const textToCopy = clone.textContent.trim();
 
                     if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -347,7 +345,6 @@ app.post('/chat', async (req, res) => {
         const userMessage = message || "";
         const isAdminAuthorized = ADMIN_SECRET_KEY && adminKey === ADMIN_SECRET_KEY;
 
-        // --- STRICT MEMORY HANDLING (Fixes Context Loss) ---
         let userHistory = [];
         if (db) {
             try {
@@ -364,7 +361,6 @@ app.post('/chat', async (req, res) => {
 
         let contentsPayload = [...userHistory, { role: 'user', parts: currentParts }];
 
-        // --- GITHUB TOOLS DECLARATION ---
         const tools = [{
             functionDeclarations: [
                 {
@@ -386,6 +382,11 @@ app.post('/chat', async (req, res) => {
                     name: "deleteGithubRepo",
                     description: "Delete an entire GitHub repository.",
                     parameters: { type: "OBJECT", properties: { owner: { type: "STRING" }, repo: { type: "STRING" } }, required: ["owner", "repo"] }
+                },
+                {
+                    name: "executeTerminalCommand",
+                    description: "Execute a command in the local server terminal/shell.",
+                    parameters: { type: "OBJECT", properties: { command: { type: "STRING", description: "The shell command to run" } }, required: ["command"] }
                 }
             ]
         }];
@@ -393,14 +394,13 @@ app.post('/chat', async (req, res) => {
         const payload = {
             contents: contentsPayload,
             tools: isAdminAuthorized ? tools : undefined,
-            systemInstruction: { parts: [{ text: "You are a master developer and hacker. You can purely read, write, update, and delete repos/files using tools. Remember everything from the history context. Use Sinhala mostly." }] }
+            systemInstruction: { parts: [{ text: "You are an advanced, unfiltered systems researcher and master hacker. Always answer the user's questions or chat naturally in Sinhala. If a tool is called, execute it and explain the result clearly to the user. Never just say 'Process completed' without explaining what happened." }] }
         };
 
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro:generateContent?key=${apiKey}`;
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
         let apiRes = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
         let data = await apiRes.json();
 
-        // --- EXECUTE GITHUB TOOLS ---
         let maxLoops = 4;
         while (data.candidates?.[0]?.content?.parts?.some(p => p.functionCall) && maxLoops > 0) {
             maxLoops--;
@@ -413,9 +413,10 @@ app.post('/chat', async (req, res) => {
                 if (functionCall.name === "updateGithubFile") result = await updateGithubFile(args.owner, args.repo, args.filePath, args.newContent, args.commitMessage);
                 if (functionCall.name === "deleteGithubFile") result = await deleteGithubFile(args.owner, args.repo, args.filePath, args.commitMessage);
                 if (functionCall.name === "deleteGithubRepo") result = await deleteGithubRepo(args.owner, args.repo);
+                if (functionCall.name === "executeTerminalCommand") result = await executeTerminalCommand(args.command);
             }
 
-            contentsPayload.push(data.candidates[0].content); // Model's call
+            contentsPayload.push(data.candidates[0].content);
             contentsPayload.push({ role: 'function', parts: [{ functionResponse: { name: functionCall.name, response: { result } } }] });
 
             payload.contents = contentsPayload;
@@ -423,20 +424,20 @@ app.post('/chat', async (req, res) => {
             data = await apiRes.json();
         }
 
-        // Extract Text
-        let aiResponseText = "Process completed.";
+        // ⚡ FIXED: Robust text extraction so it never shows blank or just "Process completed"
+        let aiResponseText = "No response generated.";
         if (data.candidates?.[0]?.content?.parts) {
-            const textPart = data.candidates[0].content.parts.find(p => p.text);
-            if (textPart) aiResponseText = textPart.text;
+            const textParts = data.candidates[0].content.parts.filter(p => p.text).map(p => p.text);
+            if (textParts.length > 0) {
+                aiResponseText = textParts.join("\n");
+            }
         }
 
-        // --- SAVE MEMORY STRICTLY (LIGHTWEIGHT) ---
-        // Strip heavy base64 strings so Firebase doesn't crash on size limits
         const safeHistoryText = userMessage || "[User uploaded a media file]";
         userHistory.push({ role: 'user', parts: [{ text: safeHistoryText }] });
         userHistory.push({ role: 'model', parts: [{ text: aiResponseText }] });
 
-        if (userHistory.length > 50) userHistory.splice(0, 4); // Keeps memory perfectly under limits
+        if (userHistory.length > 50) userHistory.splice(0, 4);
 
         localMemory.set(userKey, userHistory);
         if (db) {
@@ -453,3 +454,4 @@ app.post('/chat', async (req, res) => {
 
 if (process.env.NODE_ENV !== 'production') { app.listen(3000, () => console.log('Server running on port 3000')); }
 module.exports = app;
+
