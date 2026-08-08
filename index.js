@@ -7,18 +7,39 @@ const app = express();
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-// Firebase Initialization
+// Safe Firebase Initialization
 if (!admin.apps.length) {
     try {
-        const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
-        admin.initializeApp({
-            credential: admin.credential.cert(serviceAccount)
-        });
+        let serviceAccount;
+        const envJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+        
+        if (envJson) {
+            // Clean up and parse Vercel environment variable
+            serviceAccount = JSON.parse(envJson);
+        } else {
+            console.error("CRITICAL: FIREBASE_SERVICE_ACCOUNT_JSON is missing from environment variables.");
+        }
+
+        if (serviceAccount) {
+            admin.initializeApp({
+                credential: admin.credential.cert(serviceAccount)
+            });
+            console.log("Firebase initialized successfully");
+        }
     } catch (error) {
-        console.error("Firebase initialization error:", error);
+        console.error("Firebase initialization critical error:", error.message);
     }
 }
-const db = admin.firestore();
+
+// Initialize Firestore safely
+let db = null;
+try {
+    if (admin.apps.length) {
+        db = admin.firestore();
+    }
+} catch (e) {
+    console.error("Firestore connection error:", e.message);
+}
 
 app.get('/', (req, res) => {
     res.send(`<!DOCTYPE html>
@@ -259,7 +280,7 @@ app.get('/', (req, res) => {
 app.get('/get-history', async (req, res) => {
     try {
         const { clientId } = req.query;
-        if (!clientId) return res.json({ html: null });
+        if (!clientId || !db) return res.json({ html: null });
         
         const docRef = db.collection('chats').doc(clientId);
         const doc = await docRef.get();
@@ -274,7 +295,7 @@ app.get('/get-history', async (req, res) => {
 app.post('/save-html', async (req, res) => {
     try {
         const { clientId, html } = req.body;
-        if (clientId && html) {
+        if (clientId && html && db) {
             await db.collection('chats').doc(clientId).set({ 
                 html, 
                 timestamp: Date.now() 
@@ -290,7 +311,7 @@ app.post('/save-html', async (req, res) => {
 app.post('/clear', async (req, res) => {
     try {
         const { clientId } = req.body;
-        if (clientId) {
+        if (clientId && db) {
             await db.collection('chats').doc(clientId).delete();
         }
         res.json({ status: 'cleared' });
@@ -314,12 +335,17 @@ app.post('/chat', async (req, res) => {
 
         const userKey = clientId || 'default_user';
 
-        // Fetch user history from Firestore
-        const docRef = db.collection('chats').doc(userKey);
-        const doc = await docRef.get();
         let userHistory = [];
-        if (doc.exists && doc.data().history) {
-            userHistory = doc.data().history;
+        if (db) {
+            try {
+                const docRef = db.collection('chats').doc(userKey);
+                const doc = await docRef.get();
+                if (doc.exists && doc.data().history) {
+                    userHistory = doc.data().history;
+                }
+            } catch (err) {
+                console.error("History fetch error:", err.message);
+            }
         }
 
         let currentParts = [];
@@ -378,8 +404,14 @@ app.post('/chat', async (req, res) => {
                 userHistory.splice(0, 4);
             }
 
-            // Save updated history back to Firestore
-            await docRef.set({ history: userHistory }, { merge: true });
+            if (db) {
+                try {
+                    const docRef = db.collection('chats').doc(userKey);
+                    await docRef.set({ history: userHistory }, { merge: true });
+                } catch (err) {
+                    console.error("History save error:", err.message);
+                }
+            }
 
             return res.json({ response: aiResponseText });
         } else {
