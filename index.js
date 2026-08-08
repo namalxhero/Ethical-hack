@@ -1,5 +1,6 @@
 const express = require('express');
 const admin = require('firebase-admin');
+const { findTopic, findErrorFix } = require('./data.js');
 
 const app = express();
 
@@ -333,6 +334,23 @@ app.post('/chat', async (req, res) => {
         }
 
         const userKey = clientId || 'default_user';
+        const userMessage = message || "";
+
+        // data.js lookup integration
+        let matchedDataResponse = null;
+        try {
+            const topic = findTopic(userMessage);
+            if (topic) {
+                matchedDataResponse = topic.explanation + (topic.code ? `\n\`\`\`python\n${topic.code}\n\`\`\`` : '');
+            } else {
+                const errorFix = findErrorFix(userMessage);
+                if (errorFix) {
+                    matchedDataResponse = errorFix.explanation + (errorFix.code ? `\n\`\`\`python\n${errorFix.code}\n\`\`\`` : '');
+                }
+            }
+        } catch (dataErr) {
+            console.error("data.js lookup error:", dataErr.message);
+        }
 
         let userHistory = [];
         if (db) {
@@ -356,7 +374,7 @@ app.post('/chat', async (req, res) => {
                 }
             });
         }
-        currentParts.push({ text: message || "Analyze input data." });
+        currentParts.push({ text: userMessage || "Analyze input data." });
 
         let contentsPayload = [...userHistory];
         contentsPayload.push({
@@ -388,7 +406,11 @@ app.post('/chat', async (req, res) => {
         const data = await apiRes.json();
 
         if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0].text) {
-            const aiResponseText = data.candidates[0].content.parts[0].text;
+            let aiResponseText = data.candidates[0].content.parts[0].text;
+
+            if (matchedDataResponse) {
+                aiResponseText = matchedDataResponse + "\n\n" + aiResponseText;
+            }
 
             userHistory.push({
                 role: 'user',
@@ -430,3 +452,4 @@ if (process.env.NODE_ENV !== 'production') {
 }
 
 module.exports = app;
+
