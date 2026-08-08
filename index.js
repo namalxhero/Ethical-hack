@@ -76,33 +76,6 @@ app.get('/', (req, res) => {
         let adminKey = localStorage.getItem('sec_admin_key') || prompt("Enter Admin Key:");
         if(adminKey) localStorage.setItem('sec_admin_key', adminKey);
 
-        async function loadHistory() {
-            try {
-                const res = await fetch('/history', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ clientId })
-                });
-                const data = await res.json();
-                if (data.history && data.history.length > 0) {
-                    const chatBox = document.getElementById('chat-box');
-                    chatBox.innerHTML = '';
-                    data.history.forEach(item => {
-                        if (item.role === 'user') {
-                            chatBox.innerHTML += '<div class="message user">' + (item.parts[0].text || '') + '</div>';
-                        } else if (item.role === 'model') {
-                            chatBox.innerHTML += '<div class="message ai">' + marked.parse(item.parts[0].text || "No response.") + '</div>';
-                        }
-                    });
-                    chatBox.scrollTop = chatBox.scrollHeight;
-                }
-            } catch (err) {
-                console.error("Failed to load history");
-            }
-        }
-
-        loadHistory();
-
         async function startNewChat() {
             if (confirm("Wipe memory?")) {
                 await fetch('/clear', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clientId }) });
@@ -135,21 +108,6 @@ app.get('/', (req, res) => {
     </script>
 </body>
 </html>`);
-});
-
-app.post('/history', async (req, res) => {
-    const { clientId } = req.body;
-    const db = getDb();
-    let userHistory = [];
-    if (clientId) {
-        if (db) {
-            const doc = await db.collection('chats').doc(clientId).get();
-            if (doc.exists && doc.data().history) userHistory = doc.data().history;
-        } else {
-            userHistory = localMemory.get(clientId) || [];
-        }
-    }
-    res.json({ history: userHistory });
 });
 
 app.post('/clear', async (req, res) => {
