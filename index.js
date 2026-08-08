@@ -1,5 +1,4 @@
 const express = require('express');
-const serverless = require('serverless-http');
 const admin = require('firebase-admin');
 
 const app = express();
@@ -7,7 +6,7 @@ const app = express();
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-// Lazy Initialization for Firebase to prevent timeout on cold start
+// Lazy Initialization for Firebase
 function getDb() {
     if (!admin.apps.length) {
         try {
@@ -36,7 +35,9 @@ function getDb() {
 }
 
 app.get('/', (req, res) => {
-    res.send(`<!DOCTYPE html>
+    console.log("GET / route successfully hit");
+    res.setHeader('Content-Type', 'text/html');
+    res.status(200).send(`<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -428,5 +429,5 @@ if (process.env.NODE_ENV !== 'production') {
     app.listen(3000, () => console.log('Stealth AI Server running on port 3000'));
 }
 
-module.exports = serverless(app);
+module.exports = app;
 
