@@ -1,15 +1,13 @@
 {
-  "name": "cyber-chat-bot",
+  "name": "stealth-tech-ai",
   "version": "1.0.0",
-  "description": "Chat bot service - cyber security explanations with GitHub repo integration",
+  "description": "Stealth AI Vercel App",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
-    "@google/genai": "latest"
-  },
-  "engines": {
-    "node": ">=18.0.0"
+    "express": "^4.19.2",
+    "firebase-admin": "^12.1.0"
   }
 }
