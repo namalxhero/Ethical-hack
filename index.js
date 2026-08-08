@@ -7,6 +7,111 @@ const app = express();
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
+// ------------------------------------------------------------
+// GitHub Functions & Config
+// ------------------------------------------------------------
+const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
+const ADMIN_SECRET_KEY = process.env.ADMIN_SECRET_KEY;
+
+async function createGithubRepo(repoName, isPrivate = false, description = "") {
+    const url = "https://api.github.com/user/repos";
+    const res = await fetch(url, {
+        method: "POST",
+        headers: {
+            Authorization: `token ${GITHUB_TOKEN}`,
+            "Content-Type": "application/json",
+            Accept: "application/vnd.github+json",
+        },
+        body: JSON.stringify({
+            name: repoName,
+            description,
+            private: isPrivate,
+            auto_init: true,
+        }),
+    });
+    const data = await res.json();
+    if (res.status === 201) {
+        return { success: true, url: data.html_url, fullName: data.full_name };
+    }
+    return { success: false, error: data.message || "Unknown error" };
+}
+
+async function updateGithubFile(owner, repo, filePath, newContent, commitMessage) {
+    const url = `https://api.github.com/repos/${owner}/${repo}/contents/${filePath}`;
+    let sha;
+    const getRes = await fetch(url, {
+        headers: { Authorization: `token ${GITHUB_TOKEN}` },
+    });
+    if (getRes.status === 200) {
+        const fileData = await getRes.json();
+        sha = fileData.sha;
+    }
+
+    const body = {
+        message: commitMessage,
+        content: Buffer.from(newContent).toString("base64"),
+    };
+    if (sha) body.sha = sha;
+
+    const putRes = await fetch(url, {
+        method: "PUT",
+        headers: {
+            Authorization: `token ${GITHUB_TOKEN}`,
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+    });
+
+    const data = await putRes.json();
+    return putRes.status === 200 || putRes.status === 201
+        ? { success: true, url: data.content?.html_url }
+        : { success: false, error: data.message || "Unknown error" };
+}
+
+async function createRepoWithFile(repoName, fileName, fileContent) {
+    const repoResult = await createGithubRepo(repoName);
+    if (!repoResult.success) return repoResult;
+
+    await new Promise((r) => setTimeout(r, 1500));
+
+    const [owner, repo] = repoResult.fullName.split("/");
+    const fileResult = await updateGithubFile(owner, repo, fileName, fileContent, `Add ${fileName}`);
+
+    return { success: true, repoUrl: repoResult.url, fileResult };
+}
+
+async function handleCommand(adminKey, message) {
+    if (!ADMIN_SECRET_KEY || adminKey !== ADMIN_SECRET_KEY) {
+        return "⚠️ මේ command එක admin ට විතරයි (adminKey වැරදියි).";
+    }
+
+    if (message.startsWith("/createrepo")) {
+        const repoName = message.replace("/createrepo", "").trim();
+        if (!repoName) return "Repo name එකක් දෙන්න: /createrepo my-repo";
+
+        const result = await createGithubRepo(repoName);
+        return result.success
+            ? `✅ Repo හැදුනා: ${result.url}`
+            : `❌ Repo හදන්න බැරි වුනා: ${result.error}`;
+    }
+
+    if (message.startsWith("/createrepowithfile")) {
+        const parts = message.replace("/createrepowithfile", "").trim().split("|");
+        if (parts.length < 3) {
+            return "Format: /createrepowithfile repo-name|filename.js|content";
+        }
+        const [repoName, fileName, ...contentParts] = parts;
+        const content = contentParts.join("|");
+
+        const result = await createRepoWithFile(repoName.trim(), fileName.trim(), content);
+        return result.success
+            ? `✅ Repo + file හැදුනා: ${result.repoUrl}`
+            : `❌ අසාර්ථකයි: ${result.error}`;
+    }
+
+    return null;
+}
+
 // Lazy Initialization for Firebase
 function getDb() {
     if (!admin.apps.length) {
@@ -91,7 +196,7 @@ app.get('/', (req, res) => {
         <label for="media-file" class="file-btn">📎</label>
         <input type="file" id="media-file" accept="image/*,video/*,.txt,.py,.js,.log,.json" onchange="showFileName()">
         <span id="file-name"></span>
-        <input type="text" id="user-input" placeholder="Enter command or query..." onkeypress="if(event.key === 'Enter') sendMessage()">
+        <input type="text" id="user-input" placeholder="Enter command or query (e.g. /createrepo...)" onkeypress="if(event.key === 'Enter') sendMessage()">
         <button class="send-btn" onclick="sendMessage()">EXEC</button>
     </div>
 
@@ -199,6 +304,12 @@ app.get('/', (req, res) => {
 
             if (!text && !file) return;
 
+            // Prompt for adminKey if message starts with '/'
+            let adminKey = null;
+            if (text.startsWith('/')) {
+                adminKey = prompt("Enter Admin Secret Key for GitHub command:");
+            }
+
             let userHtml = '<div class="message user">';
             if (text) userHtml += '<div>' + escapeHtml(text) + '</div>';
 
@@ -228,7 +339,7 @@ app.get('/', (req, res) => {
                 const res = await fetch('/chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: text, media: mediaBase64, mimeType: mimeType, clientId: clientId })
+                    body: JSON.stringify({ message: text, media: mediaBase64, mimeType: mimeType, clientId: clientId, adminKey: adminKey })
                 });
                 const data = await res.json();
 
@@ -323,18 +434,26 @@ app.post('/clear', async (req, res) => {
 app.post('/chat', async (req, res) => {
     try {
         const db = getDb();
-        const { message, media, mimeType, clientId } = req.body;
+        const { message, media, mimeType, clientId, adminKey } = req.body;
         if (!message && !media) {
             return res.json({ response: "Error: Null payload received." });
+        }
+
+        const userKey = clientId || 'default_user';
+        const userMessage = message || "";
+
+        // 1. Check for Admin GitHub Commands first if message starts with '/'
+        if (userMessage.startsWith("/")) {
+            const commandResult = await handleCommand(adminKey, userMessage);
+            if (commandResult) {
+                return res.json({ response: commandResult });
+            }
         }
 
         const apiKey = process.env.GEMINI_API_KEY;
         if (!apiKey) {
             return res.json({ response: "System Error: GEMINI_API_KEY environment variable is not set." });
         }
-
-        const userKey = clientId || 'default_user';
-        const userMessage = message || "";
 
         // data.js lookup integration
         let matchedDataResponse = null;
@@ -382,7 +501,7 @@ app.post('/chat', async (req, res) => {
             parts: currentParts
         });
 
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${apiKey}`;
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
 
         const payload = {
             contents: contentsPayload,
@@ -452,4 +571,3 @@ if (process.env.NODE_ENV !== 'production') {
 }
 
 module.exports = app;
-
