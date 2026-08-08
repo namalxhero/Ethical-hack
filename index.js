@@ -14,7 +14,6 @@ if (!admin.apps.length) {
         const envJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
         
         if (envJson) {
-            // Clean up and parse Vercel environment variable
             serviceAccount = JSON.parse(envJson);
         } else {
             console.error("CRITICAL: FIREBASE_SERVICE_ACCOUNT_JSON is missing from environment variables.");
@@ -31,7 +30,6 @@ if (!admin.apps.length) {
     }
 }
 
-// Initialize Firestore safely
 let db = null;
 try {
     if (admin.apps.length) {
@@ -204,7 +202,7 @@ app.get('/', (req, res) => {
             if (!text && !file) return;
 
             let userHtml = '<div class="message user">';
-            if (text) userHtml += `<div>${escapeHtml(text)}</div>`;
+            if (text) userHtml += '<div>' + escapeHtml(text) + '</div>';
 
             let mediaBase64 = null;
             let mimeType = null;
@@ -215,9 +213,9 @@ app.get('/', (req, res) => {
                 mediaBase64 = base64Full.split(',')[1];
 
                 if (mimeType.startsWith('image/')) {
-                    userHtml += `<img src="${base64Full}">`;
+                    userHtml += '<img src="' + base64Full + '">';
                 } else {
-                    userHtml += `<div style="font-size:12px; color:#aaa;">[Attached: ${file.name}]</div>`;
+                    userHtml += '<div style="font-size:12px; color:#aaa;">[Attached: ' + file.name + ']</div>';
                 }
             }
             userHtml += '</div>';
@@ -249,7 +247,7 @@ app.get('/', (req, res) => {
 
                 await saveHtmlState(chatBox.innerHTML);
             } catch (err) {
-                chatBox.innerHTML += `<div class="message ai" style="color:#ff0000;">Execution failed: Network error.</div>`;
+                chatBox.innerHTML += '<div class="message ai" style="color:#ff0000;">Execution failed: Network error.</div>';
                 scrollToBottom();
             }
         }
