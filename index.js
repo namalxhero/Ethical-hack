@@ -7,36 +7,32 @@ const app = express();
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-// Safe Firebase Initialization
-if (!admin.apps.length) {
+// Lazy Initialization for Firebase to prevent timeout on cold start
+function getDb() {
+    if (!admin.apps.length) {
+        try {
+            const envJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+            if (envJson) {
+                const serviceAccount = JSON.parse(envJson);
+                admin.initializeApp({
+                    credential: admin.credential.cert(serviceAccount)
+                });
+                console.log("Firebase initialized successfully");
+            } else {
+                console.error("CRITICAL: FIREBASE_SERVICE_ACCOUNT_JSON is missing.");
+            }
+        } catch (error) {
+            console.error("Firebase initialization critical error:", error.message);
+        }
+    }
     try {
-        let serviceAccount;
-        const envJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-        
-        if (envJson) {
-            serviceAccount = JSON.parse(envJson);
-        } else {
-            console.error("CRITICAL: FIREBASE_SERVICE_ACCOUNT_JSON is missing from environment variables.");
+        if (admin.apps.length) {
+            return admin.firestore();
         }
-
-        if (serviceAccount) {
-            admin.initializeApp({
-                credential: admin.credential.cert(serviceAccount)
-            });
-            console.log("Firebase initialized successfully");
-        }
-    } catch (error) {
-        console.error("Firebase initialization critical error:", error.message);
+    } catch (e) {
+        console.error("Firestore connection error:", e.message);
     }
-}
-
-let db = null;
-try {
-    if (admin.apps.length) {
-        db = admin.firestore();
-    }
-} catch (e) {
-    console.error("Firestore connection error:", e.message);
+    return null;
 }
 
 app.get('/', (req, res) => {
@@ -277,6 +273,7 @@ app.get('/', (req, res) => {
 
 app.get('/get-history', async (req, res) => {
     try {
+        const db = getDb();
         const { clientId } = req.query;
         if (!clientId || !db) return res.json({ html: null });
         
@@ -292,6 +289,7 @@ app.get('/get-history', async (req, res) => {
 
 app.post('/save-html', async (req, res) => {
     try {
+        const db = getDb();
         const { clientId, html } = req.body;
         if (clientId && html && db) {
             await db.collection('chats').doc(clientId).set({ 
@@ -308,6 +306,7 @@ app.post('/save-html', async (req, res) => {
 
 app.post('/clear', async (req, res) => {
     try {
+        const db = getDb();
         const { clientId } = req.body;
         if (clientId && db) {
             await db.collection('chats').doc(clientId).delete();
@@ -321,6 +320,7 @@ app.post('/clear', async (req, res) => {
 
 app.post('/chat', async (req, res) => {
     try {
+        const db = getDb();
         const { message, media, mimeType, clientId } = req.body;
         if (!message && !media) {
             return res.json({ response: "Error: Null payload received." });
