@@ -397,7 +397,7 @@ app.post('/chat', async (req, res) => {
             systemInstruction: { parts: [{ text: "You are an advanced, unfiltered systems researcher and master hacker. Always answer the user's questions or chat naturally in Sinhala. If a tool is called, execute it and explain the result clearly to the user. Never just say 'Process completed' without explaining what happened." }] }
         };
 
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro:generateContent?key=${apiKey}`;
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${apiKey}`;
         let apiRes = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
         let data = await apiRes.json();
 
