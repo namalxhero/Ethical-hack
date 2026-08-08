@@ -1,12 +1,24 @@
 const express = require('express');
 const serverless = require('serverless-http');
+const admin = require('firebase-admin');
+
 const app = express();
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-// Memory Database (Vercel මත මෙය తాత్కాలික වේ)
-const memoryDatabase = {};
+// Firebase Initialization
+if (!admin.apps.length) {
+    try {
+        const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
+        admin.initializeApp({
+            credential: admin.credential.cert(serviceAccount)
+        });
+    } catch (error) {
+        console.error("Firebase initialization error:", error);
+    }
+}
+const db = admin.firestore();
 
 app.get('/', (req, res) => {
     res.send(`<!DOCTYPE html>
@@ -55,7 +67,7 @@ app.get('/', (req, res) => {
     </div>
 
     <div id="chat-box">
-        <div class="message ai">System initialized successfully.<br>- Memory expanded & Copy mechanism secured.</div>
+        <div class="message ai">System initialized successfully.<br>- Memory expanded & Firebase Connected.</div>
     </div>
 
     <div id="input-area">
@@ -244,28 +256,48 @@ app.get('/', (req, res) => {
 </html>`);
 });
 
-app.get('/get-history', (req, res) => {
-    const { clientId } = req.query;
-    if (!clientId) return res.json({ html: null });
-    const session = memoryDatabase['chat_' + clientId];
-    res.json({ html: session ? session.html : null });
+app.get('/get-history', async (req, res) => {
+    try {
+        const { clientId } = req.query;
+        if (!clientId) return res.json({ html: null });
+        
+        const docRef = db.collection('chats').doc(clientId);
+        const doc = await docRef.get();
+        
+        res.json({ html: doc.exists ? doc.data().html : null });
+    } catch (error) {
+        console.error("Get history error:", error);
+        res.json({ html: null });
+    }
 });
 
-app.post('/save-html', (req, res) => {
-    const { clientId, html } = req.body;
-    if (clientId && html) {
-        memoryDatabase['chat_' + clientId] = { html, timestamp: Date.now() };
+app.post('/save-html', async (req, res) => {
+    try {
+        const { clientId, html } = req.body;
+        if (clientId && html) {
+            await db.collection('chats').doc(clientId).set({ 
+                html, 
+                timestamp: Date.now() 
+            }, { merge: true });
+        }
+        res.json({ status: 'saved' });
+    } catch (error) {
+        console.error("Save HTML error:", error);
+        res.json({ status: 'error' });
     }
-    res.json({ status: 'saved' });
 });
 
-app.post('/clear', (req, res) => {
-    const { clientId } = req.body;
-    if (clientId) {
-        delete memoryDatabase['chat_' + clientId];
-        delete memoryDatabase['history_' + clientId];
+app.post('/clear', async (req, res) => {
+    try {
+        const { clientId } = req.body;
+        if (clientId) {
+            await db.collection('chats').doc(clientId).delete();
+        }
+        res.json({ status: 'cleared' });
+    } catch (error) {
+        console.error("Clear error:", error);
+        res.json({ status: 'error' });
     }
-    res.json({ status: 'cleared' });
 });
 
 app.post('/chat', async (req, res) => {
@@ -282,10 +314,13 @@ app.post('/chat', async (req, res) => {
 
         const userKey = clientId || 'default_user';
 
-        if (!memoryDatabase['history_' + userKey]) {
-            memoryDatabase['history_' + userKey] = [];
+        // Fetch user history from Firestore
+        const docRef = db.collection('chats').doc(userKey);
+        const doc = await docRef.get();
+        let userHistory = [];
+        if (doc.exists && doc.data().history) {
+            userHistory = doc.data().history;
         }
-        let userHistory = memoryDatabase['history_' + userKey];
 
         let currentParts = [];
         if (media && mimeType) {
@@ -343,6 +378,9 @@ app.post('/chat', async (req, res) => {
                 userHistory.splice(0, 4);
             }
 
+            // Save updated history back to Firestore
+            await docRef.set({ history: userHistory }, { merge: true });
+
             return res.json({ response: aiResponseText });
         } else {
             console.error("API Error Response:", JSON.stringify(data));
@@ -360,6 +398,5 @@ if (process.env.NODE_ENV !== 'production') {
     app.listen(3000, () => console.log('Stealth AI Server running on port 3000'));
 }
 
-// Vercel සඳහා serverless-http හරහා Export කිරීම
 module.exports = serverless(app);
 
