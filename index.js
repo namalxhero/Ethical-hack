@@ -85,15 +85,31 @@ app.get('/', (req, res) => {
         let isOwnerMode = localStorage.getItem('stealth_owner_' + clientId) === 'true';
 
         document.addEventListener("DOMContentLoaded", async () => {
-            if (!isOwnerMode) {
-                const savedHtml = localStorage.getItem('stealth_html_public_' + clientId);
-                if (savedHtml) {
-                    document.getElementById('chat-box').innerHTML = savedHtml;
-                    addCopyButtons(document.getElementById('chat-box'));
-                    scrollToBottom();
-                }
+            const savedHtml = localStorage.getItem('stealth_html_' + clientId);
+            if (savedHtml) {
+                document.getElementById('chat-box').innerHTML = savedHtml;
+                scrollToBottom();
             }
             updateTitle();
+        });
+
+        // Global Event Delegation for Copy Buttons (Works for both past and new messages)
+        document.getElementById('chat-box').addEventListener('click', function(e) {
+            if (e.target.classList.contains('copy-msg-btn')) {
+                const text = e.target.getAttribute('data-text') || '';
+                navigator.clipboard.writeText(text);
+                e.target.textContent = 'Copied Text!';
+                setTimeout(() => e.target.textContent = 'Copy Response', 2000);
+            }
+            if (e.target.classList.contains('copy-code-btn')) {
+                const pre = e.target.closest('pre');
+                if (pre) {
+                    const codeEl = pre.querySelector('code') || pre;
+                    navigator.clipboard.writeText(codeEl.innerText.trim());
+                    e.target.textContent = 'Copied!';
+                    setTimeout(() => e.target.textContent = 'Copy Code', 2000);
+                }
+            }
         });
 
         function updateTitle() {
@@ -108,7 +124,7 @@ app.get('/', (req, res) => {
         async function startNewChat() {
             if (confirm("Reset current session?")) {
                 localStorage.removeItem('stealth_history_' + clientId);
-                localStorage.removeItem('stealth_html_public_' + clientId);
+                localStorage.removeItem('stealth_html_' + clientId);
                 chatHistory = [];
                 location.reload();
             }
@@ -124,26 +140,14 @@ app.get('/', (req, res) => {
             cb.scrollTop = cb.scrollHeight;
         }
 
-        function addCopyButtons(container) {
+        function addCopyButtonsToPre(container) {
             container.querySelectorAll('pre').forEach(pre => {
                 if (pre.querySelector('.copy-code-btn')) return;
                 const btn = document.createElement('button');
                 btn.className = 'copy-code-btn';
                 btn.textContent = 'Copy Code';
-                btn.onclick = () => {
-                    const codeEl = pre.querySelector('code') || pre;
-                    navigator.clipboard.writeText(codeEl.innerText.trim());
-                    btn.textContent = 'Copied!';
-                    setTimeout(() => btn.textContent = 'Copy Code', 2000);
-                };
                 pre.appendChild(btn);
             });
-        }
-
-        function copyFullMessage(btn, text) {
-            navigator.clipboard.writeText(text);
-            btn.textContent = 'Copied Text!';
-            setTimeout(() => btn.textContent = 'Copy Response', 2000);
         }
 
         async function sendMessage() {
@@ -209,18 +213,16 @@ app.get('/', (req, res) => {
                     const copyMsgBtn = document.createElement('button');
                     copyMsgBtn.className = 'copy-msg-btn';
                     copyMsgBtn.textContent = 'Copy Response';
-                    copyMsgBtn.onclick = () => copyFullMessage(copyMsgBtn, data.response);
+                    copyMsgBtn.setAttribute('data-text', data.response || "");
 
                     aiContainer.appendChild(aiDiv);
                     aiContainer.appendChild(copyMsgBtn);
 
-                    addCopyButtons(aiDiv);
+                    addCopyButtonsToPre(aiDiv);
                     chatBox.appendChild(aiContainer);
                     scrollToBottom();
 
-                    if (!isOwnerMode) {
-                        localStorage.setItem('stealth_html_public_' + clientId, chatBox.innerHTML);
-                    }
+                    localStorage.setItem('stealth_html_' + clientId, chatBox.innerHTML);
                 }
 
             } catch (err) {
@@ -357,7 +359,7 @@ app.post('/chat', async (req, res) => {
             if (newHistory.length > 20) newHistory = newHistory.slice(newHistory.length - 20);
             while (newHistory.length > 0 && newHistory[0].role !== 'user') newHistory.shift();
 
-            if (!isOwnerMode && db && clientId) {
+            if (db && clientId) {
                 try {
                     await db.collection('chats').doc(clientId).set({ history: newHistory, lastActive: Date.now() }, { merge: true });
                 } catch (fbErr) {
@@ -378,3 +380,4 @@ if (process.env.NODE_ENV !== 'production') {
 }
 
 module.exports = app;
+
