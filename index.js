@@ -243,7 +243,6 @@ app.post('/chat', async (req, res) => {
         let userHistory = history || [];
         const db = getDb();
 
-        // Firestore එකෙන් ස්ථිරවම History එක ਲੋඩ් කර ගැනීම
         if (db && clientId && userHistory.length === 0) {
             try {
                 const doc = await db.collection('chats').doc(clientId).get();
@@ -263,7 +262,6 @@ app.post('/chat', async (req, res) => {
             return res.json({ response: "🔒 **Exited Owner Mode.**", history: userHistory, isOwnerMode: false });
         }
 
-        // Owner Surveillance Command (/logs)
         if (message && message.trim() === '/logs' && isOwnerMode) {
             let logsText = "📂 **Recent User Activity Logs:**\n";
             if (db) {
@@ -318,46 +316,63 @@ app.post('/chat', async (req, res) => {
             };
         }
 
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${apiKey}`;
-        let apiRes = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-        let data = await apiRes.json();
+        // Model name: 'gemini-3.5-flash-lite'
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${apiKey}`;
+        
+        let apiRes = await fetch(url, { 
+            method: 'POST', 
+            headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify(payload) 
+        });
+
+        let rawText = await apiRes.text();
+        let data;
+        try {
+            data = JSON.parse(rawText);
+        } catch (parseErr) {
+            data = { error: { message: "Invalid JSON response from Google API." } };
+        }
 
         let aiResponseText = "No response generated.";
+        let apiSuccess = false; 
 
-        // API එකෙන් Error එකක් ආවොත් ඒක හරියටම අල්ලාගෙන පෙන්වීමට සකස් කරන ලදී
         if (data.error) {
-            aiResponseText = "API Error: " + data.error.message;
+            aiResponseText = "⚠️ **API Error:** " + (data.error.message || JSON.stringify(data.error));
         } else if (data.candidates?.[0]?.content?.parts) {
             const textParts = data.candidates[0].content.parts.filter(p => p.text).map(p => p.text);
             if (textParts.length > 0) {
                 aiResponseText = textParts.join("\n");
+                apiSuccess = true; 
             }
         }
 
-        let newHistory = [...userHistory, { role: 'user', parts: currentParts }];
-        newHistory.push({ role: 'model', parts: [{ text: aiResponseText }] });
+        let newHistory = [...userHistory];
 
-        newHistory = newHistory.map(msg => ({
-            role: msg.role,
-            parts: msg.parts.map(p => p.text ? { text: p.text } : { text: "[Media attached]" })
-        }));
+        if (apiSuccess) {
+            newHistory.push({ role: 'user', parts: currentParts });
+            newHistory.push({ role: 'model', parts: [{ text: aiResponseText }] });
 
-        if (newHistory.length > 20) newHistory = newHistory.slice(newHistory.length - 20);
-        while (newHistory.length > 0 && newHistory[0].role !== 'user') newHistory.shift();
+            newHistory = newHistory.map(msg => ({
+                role: msg.role,
+                parts: msg.parts.map(p => p.text ? { text: p.text } : { text: "[Media attached]" })
+            }));
 
-        // Firestore එකේ ස්ථිරව Save වීම
-        if (!isOwnerMode && db && clientId) {
-            try {
-                await db.collection('chats').doc(clientId).set({ history: newHistory, lastActive: Date.now() }, { merge: true });
-            } catch (fbErr) {
-                console.error("Firestore write ignored:", fbErr.message);
+            if (newHistory.length > 20) newHistory = newHistory.slice(newHistory.length - 20);
+            while (newHistory.length > 0 && newHistory[0].role !== 'user') newHistory.shift();
+
+            if (!isOwnerMode && db && clientId) {
+                try {
+                    await db.collection('chats').doc(clientId).set({ history: newHistory, lastActive: Date.now() }, { merge: true });
+                } catch (fbErr) {
+                    console.error("Firestore write ignored:", fbErr.message);
+                }
             }
         }
 
-        return res.json({ response: aiResponseText, history: newHistory, isOwnerMode });
+        return res.json({ response: aiResponseText, history: apiSuccess ? newHistory : userHistory, isOwnerMode });
 
     } catch (error) {
-        return res.json({ response: "Fatal Error: " + error.message, history: req.body.history, isOwnerMode: req.body.isOwnerMode });
+        return res.json({ response: "Fatal Backend Error: " + error.message, history: req.body.history, isOwnerMode: req.body.isOwnerMode });
     }
 });
 
@@ -366,4 +381,3 @@ if (process.env.NODE_ENV !== 'production') {
 }
 
 module.exports = app;
-
