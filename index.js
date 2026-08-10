@@ -94,7 +94,7 @@ app.get('/', (req, res) => {
             <button class="new-chat-btn" onclick="startNewChat()">Clear Chat</button>
         </div>
     </div>
-    <div id="chat-box"><div class="message-container ai-container"><div class="message ai">System Online. Ready.</div></div></div>
+    <div id="chat-box"></div>
     <div id="input-area">
         <label for="media-file" class="file-btn">📎</label>
         <input type="file" id="media-file" accept="image/*,video/*,.txt,.py,.js,.json" onchange="showFileName()">
@@ -111,25 +111,57 @@ app.get('/', (req, res) => {
         let chatHistory = [];
 
         document.addEventListener("DOMContentLoaded", async () => {
+            await migrateLocalDataToFirebase();
             await loadHistoryFromFirebase();
             updateTitle();
         });
 
-        // Firebase එකෙන් හිස්ට්‍රි එක ලෝඩ් කර UI එක පෙන්වීම
+        // 1. පරණ localStorage එකේ තිබ්බ දත්ත Firebase එකට යැවීම
+        async function migrateLocalDataToFirebase() {
+            const normalKey = 'stealth_history_normal_' + clientId;
+            const ownerKey = 'stealth_history_owner_' + clientId;
+            
+            const normalHistStr = localStorage.getItem(normalKey);
+            const ownerHistStr = localStorage.getItem(ownerKey);
+            
+            if (normalHistStr || ownerHistStr) {
+                try {
+                    const normalHist = normalHistStr ? JSON.parse(normalHistStr) : [];
+                    const ownerHist = ownerHistStr ? JSON.parse(ownerHistStr) : [];
+                    
+                    await fetch('/migrate-history', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ clientId, normalHistory: normalHist, ownerHistory: ownerHist })
+                    });
+
+                    // යැව්වට පස්සේ අයින් කිරීම
+                    localStorage.removeItem(normalKey);
+                    localStorage.removeItem(ownerKey);
+                    localStorage.removeItem('stealth_html_normal_' + clientId);
+                    localStorage.removeItem('stealth_html_owner_' + clientId);
+                    console.log("Old history migrated to Firebase and local storage cleared.");
+                } catch(e) {
+                    console.error("Migration failed:", e);
+                }
+            }
+        }
+
+        // 2. Firebase එකෙන් හිස්ට්‍රි එක ලෝඩ් කර UI එක පෙන්වීම
         async function loadHistoryFromFirebase() {
             try {
                 const res = await fetch('/get-history?clientId=' + clientId + '&isOwnerMode=' + isOwnerMode);
                 const data = await res.json();
                 if (data.history) {
                     chatHistory = data.history;
-                    renderChatBox();
                 }
             } catch (e) {
                 console.error("Failed to load history:", e);
-                renderChatBox();
             }
+            renderChatBox();
         }
 
+        // 3. චැට් එක හරියටම Render කිරීම (Fix)
         function renderChatBox() {
             const chatBox = document.getElementById('chat-box');
             let html = '<div class="message-container ai-container"><div class="message ai">' + (isOwnerMode ? '👑 Owner Mode Active.' : 'System Online. Ready.') + '</div></div>';
@@ -138,7 +170,7 @@ app.get('/', (req, res) => {
                 const isUser = msg.role === 'user';
                 let textContent = "";
                 if (Array.isArray(msg.parts)) {
-                    textContent = msg.parts.map(p => p.text || "").join("\n");
+                    textContent = msg.parts.map(p => p.text || "").join("\\n");
                 }
 
                 if (isUser) {
@@ -189,7 +221,7 @@ app.get('/', (req, res) => {
                     body: JSON.stringify({ clientId, isOwnerMode })
                 });
                 chatHistory = [];
-                location.reload();
+                renderChatBox();
             }
         }
 
@@ -213,6 +245,7 @@ app.get('/', (req, res) => {
             });
         }
 
+        // 4. Message සෙන්ඩ් කරන කොටසේ තිබ්බ අවුල හැදුවා
         async function sendMessage() {
             const input = document.getElementById('user-input');
             const fileInput = document.getElementById('media-file');
@@ -230,9 +263,7 @@ app.get('/', (req, res) => {
 
                 if (file) {
                     const mimeType = file.type || 'text/plain';
-                    const base64Full = await new Promise(res => { const r = new FileReader(); r.readAsDataURL(file); r.onload = () => res(r.result); });
-                    if (mimeType.startsWith('image/')) userHtml += '<img src="' + base64Full + '">';
-                    else userHtml += '<div style="font-size:12px; color:#c9d1d9;">[Attached: ' + file.name + ']</div>';
+                    userHtml += '<div style="font-size:12px; color:#c9d1d9;">[Attached: ' + file.name + ']</div>';
                 }
                 userHtml += '</div></div>';
                 chatBox.innerHTML += userHtml;
@@ -263,37 +294,16 @@ app.get('/', (req, res) => {
 
                 const data = await res.json();
                 
-                if (data.isOwnerMode !== undefined && data.isOwnerMode !== isOwnerMode) {
+                if (data.isOwnerMode !== undefined) {
                     isOwnerMode = data.isOwnerMode;
                     localStorage.setItem('stealth_owner_' + clientId, isOwnerMode);
                     updateTitle();
-                    chatHistory = data.history || [];
-                    renderChatBox();
-                    return;
                 }
 
                 chatHistory = data.history || chatHistory;
                 
-                if (!isCmd || isOwnerMode) {
-                    const aiContainer = document.createElement('div');
-                    aiContainer.className = 'message-container ai-container';
-
-                    const aiDiv = document.createElement('div');
-                    aiDiv.className = 'message ai';
-                    aiDiv.innerHTML = marked.parse(data.response || "Error generating response.");
-                    
-                    const copyMsgBtn = document.createElement('button');
-                    copyMsgBtn.className = 'copy-msg-btn';
-                    copyMsgBtn.textContent = 'Copy Response';
-                    copyMsgBtn.setAttribute('data-text', data.response || "");
-
-                    aiContainer.appendChild(aiDiv);
-                    aiContainer.appendChild(copyMsgBtn);
-
-                    addCopyButtonsToPre(aiDiv);
-                    chatBox.appendChild(aiContainer);
-                    scrollToBottom();
-                }
+                // ෆුල් චැට් බොක්ස් එකම ආයේ රෙන්ඩර් වෙනවා ඩේටා ආවට පස්සේ. ඒකෙන් අවුලක් යන්නේ නෑ.
+                renderChatBox();
 
             } catch (err) {
                 console.error("Fetch Error:", err);
@@ -312,6 +322,27 @@ app.get('/', (req, res) => {
     </script>
 </body>
 </html>`);
+});
+
+// අලුත් Route: Local Storage එකේ දත්ත Firebase එකට දාන්න
+app.post('/migrate-history', async (req, res) => {
+    const { clientId, normalHistory, ownerHistory } = req.body;
+    const db = getDb();
+    if (db && clientId) {
+        try {
+            let updateData = {};
+            if (normalHistory && normalHistory.length > 0) updateData.normalHistory = normalHistory;
+            if (ownerHistory && ownerHistory.length > 0) updateData.ownerHistory = ownerHistory;
+            
+            if (Object.keys(updateData).length > 0) {
+                updateData.lastActive = Date.now();
+                await db.collection('chats').doc(clientId).set(updateData, { merge: true });
+            }
+        } catch (e) {
+            console.error("Migration error:", e.message);
+        }
+    }
+    res.json({ success: true });
 });
 
 // Firebase වලින් හිස්ට්‍රි එක ලබා දෙන Route එක
