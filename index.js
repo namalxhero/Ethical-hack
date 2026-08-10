@@ -179,8 +179,6 @@ app.get('/', (req, res) => {
 
                     localStorage.removeItem(normalKey);
                     localStorage.removeItem(ownerKey);
-                    localStorage.removeItem('stealth_html_normal_' + clientId);
-                    localStorage.removeItem('stealth_html_owner_' + clientId);
                 } catch(e) {
                     console.error("Migration failed:", e);
                 }
@@ -290,17 +288,6 @@ app.get('/', (req, res) => {
 
             const isCmd = text === '/owner' || text === '/exit';
 
-            if (!isCmd) {
-                let userHtml = '<div class="message-container user-container"><div class="message user">';
-                if (text) userHtml += '<div>' + text.replace(/</g, "&lt;").replace(/>/g, "&gt;") + '</div>';
-                if (file) userHtml += '<div style="font-size:12px; color:#c9d1d9;">[Attached: ' + file.name + ']</div>';
-                userHtml += '</div></div>';
-                chatBox.innerHTML += userHtml;
-                scrollToBottom();
-            }
-
-            input.value = ''; fileInput.value = ''; document.getElementById('file-name').textContent = '';
-
             let mediaBase64 = null, mimeType = null;
             if (file) {
                 mimeType = file.type || 'text/plain';
@@ -308,11 +295,29 @@ app.get('/', (req, res) => {
                 mediaBase64 = base64Full.split(',')[1];
             }
 
+            let currentParts = [];
+            if (mediaBase64 && mimeType) {
+                currentParts.push({ inlineData: { mimeType, data: mediaBase64 } });
+            }
+            let finalText = text || "Please process attached file.";
+            if (file) {
+                finalText += ` [Attached: ${file.name}]`;
+            }
+            currentParts.push({ text: finalText });
+
+            input.value = ''; fileInput.value = ''; document.getElementById('file-name').textContent = '';
+
+            if (!isCmd) {
+                // Immediately push and render so message doesn't disappear
+                chatHistory.push({ role: 'user', parts: currentParts });
+                renderChatBox();
+            }
+
             try {
                 const res = await fetch('/chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: text, media: mediaBase64, mimeType, history: chatHistory, isOwnerMode, clientId })
+                    body: JSON.stringify({ message: text, media: mediaBase64, mimeType, history: chatHistory.slice(0, -1), isOwnerMode, clientId })
                 });
 
                 const data = await res.json();
@@ -323,11 +328,13 @@ app.get('/', (req, res) => {
                     updateTitle();
                 }
 
-                chatHistory = data.history || chatHistory;
+                if (data.history) {
+                    chatHistory = data.history;
+                }
                 renderChatBox();
 
             } catch (err) {
-                chatBox.innerHTML += '<div class="message-container ai-container"><div class="message ai" style="color:#ff7b72;">⚠️ <b>Connection Error.</b></div></div>';
+                chatBox.innerHTML += '<div class="message-container ai-container"><div class="message ai" style="color:#ff7b72;">⚠️ <b>Connection Error: ' + err.message + '</b></div></div>';
                 scrollToBottom();
             }
         }
@@ -385,7 +392,7 @@ app.post('/chat', async (req, res) => {
     try {
         const { message, media, mimeType, history, isOwnerMode, clientId } = req.body;
         const apiKey = process.env.GEMINI_API_KEY;
-        if (!apiKey) return res.json({ response: "Error: GEMINI_API_KEY missing." });
+        if (!apiKey) return res.json({ response: "Error: GEMINI_API_KEY missing.", history });
 
         let userHistory = history || [];
         const db = getDb();
@@ -408,28 +415,23 @@ app.post('/chat', async (req, res) => {
             return res.json({ response: "🔒 **Exited Owner Mode.**", history: normalHist, isOwnerMode: false });
         }
 
-        // Automatic Feature Integrations (100% Free APIs)
         let additionalContext = "";
 
         if (message) {
-            // Feature 1: IP / Port Scanner (Alternative to Shodan)
             const ipMatch = message.match(/\b(?:\d{1,3}\.){3}\d{1,3}\b/);
             if (ipMatch && (message.toLowerCase().includes('scan') || message.toLowerCase().includes('ip'))) {
                 const scanData = await scanIPAddress(ipMatch[0]);
                 if (scanData) additionalContext += `\n[IP Intelligence Scan]:\n${scanData}\n`;
             }
 
-            // Feature 2: Free CVE & Exploit Database Lookup
             if (message.toLowerCase().includes('cve') || message.toLowerCase().includes('vulnerability') || message.toLowerCase().includes('exploit')) {
                 const cveData = await searchCVE(message);
                 if (cveData) additionalContext += `\n[CVE Database Result]:\n${cveData}\n`;
             }
 
-            // Feature 3: Free Web Search (Live Access via DuckDuckGo)
             const searchData = await freeWebSearch(message);
             if (searchData) additionalContext += `\n[Live Web Search Result]:\n${searchData}\n`;
 
-            // Feature 4: Code Execution Sandbox (via Piston API)
             if (message.startsWith('/run ') || message.toLowerCase().startsWith('run code:')) {
                 const codeToRun = message.replace(/^\/run\s+|^run code:\s*/i, '');
                 const execResult = await executeCodeInSandbox('python', codeToRun);
@@ -466,8 +468,7 @@ app.post('/chat', async (req, res) => {
                 { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
             ]
         };
-
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${apiKey}`;
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`;
         
         let apiRes = await fetch(url, { 
             method: 'POST', 
@@ -476,6 +477,10 @@ app.post('/chat', async (req, res) => {
         });
 
         let data = await apiRes.json();
+        if (!apiRes.ok) {
+            throw new Error(data.error?.message || "Gemini API failed with status " + apiRes.status);
+        }
+
         let aiResponseText = data.candidates?.[0]?.content?.parts?.[0]?.text || "No response generated.";
 
         let newHistory = [...userHistory];
@@ -503,4 +508,3 @@ if (process.env.NODE_ENV !== 'production') {
 }
 
 module.exports = app;
-
