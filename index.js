@@ -29,64 +29,55 @@ function getDb() {
 }
 
 // Timeout Wrapper Helper
-function fetchWithTimeout(url, options = {}, timeoutMs = 4000) {
+function fetchWithTimeout(url, options = {}, timeoutMs = 5000) {
     return Promise.race([
         fetchFn(url, options),
         new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), timeoutMs))
     ]);
 }
 
-// 1. Fixed Web Search via DuckDuckGo HTML Lite scraping & API Fallback
+// 1. Web Search using SearXNG Public Instances & Wikipedia API (Duckduckgo completely removed)
 async function freeWebSearch(query) {
     try {
-        // Attempt 1: DuckDuckGo HTML Lite (Robust against API JSON changes)
-        const htmlRes = await fetchWithTimeout(`https://lite.duckduckgo.com/lite/`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
-            },
-            body: `q=${encodeURIComponent(query)}`
-        }, 5000);
-
-        const htmlText = await htmlRes.text();
         const results = [];
-        
-        // Simple regex to extract snippets from DuckDuckGo lite results
-        const snippetRegex = /<td class=['"]result-snippet['"][^>]*>(.*?)<\/td>/gs;
-        let match;
-        while ((match = snippetRegex.exec(htmlText)) && results.length < 3) {
-            const cleanSnippet = match[1].replace(/<[^>]*>/g, '').trim();
-            if (cleanSnippet) {
-                results.push(`- [Verified Fact]: ${cleanSnippet}`);
+
+        // Attempt 1: SearXNG Public Instance API
+        try {
+            const searxRes = await fetchWithTimeout(`https://searx.be/search?q=${encodeURIComponent(query)}&format=json`, {
+                headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) StealthTechAI/1.0' }
+            });
+            const searxData = await searxRes.json();
+            if (searxData && Array.isArray(searxData.results) && searxData.results.length > 0) {
+                searxData.results.slice(0, 3).forEach(item => {
+                    if (item.title && item.content) {
+                        results.push(`- [Verified Source - SearXNG]: ${item.title}: ${item.content}`);
+                    }
+                });
             }
+        } catch (searxErr) {
+            console.error("SearXNG search warning:", searxErr.message);
         }
 
+        // If SearXNG got results, return them
         if (results.length > 0) {
             return results.join("\n");
         }
 
-        // Attempt 2: Fallback to DuckDuckGo Instant Answer API if HTML scraping yields nothing
-        const apiRes = await fetchWithTimeout(`https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`, {
-            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
-        }, 4000);
-
-        const data = await apiRes.json();
-        if (data.AbstractText) {
-            results.push(`- [Verified Fact]: ${data.AbstractText}`);
-        }
-
-        if (Array.isArray(data.RelatedTopics)) {
-            for (const topic of data.RelatedTopics) {
-                if (topic.Text && results.length < 3) {
-                    results.push(`- [Verified Source]: ${topic.Text}`);
-                }
-            }
+        // Attempt 2: Wikipedia API Fallback
+        const wikiRes = await fetchWithTimeout(`https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&format=json`, {
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) StealthTechAI/1.0' }
+        });
+        const wikiData = await wikiRes.json();
+        if (wikiData?.query?.search && wikiData.query.search.length > 0) {
+            wikiData.query.search.slice(0, 3).forEach(item => {
+                const cleanSnippet = item.snippet.replace(/<[^>]*>/g, '');
+                results.push(`- [Verified Fact - Wikipedia]: ${item.title}: ${cleanSnippet}`);
+            });
         }
 
         return results.length ? results.join("\n") : "No direct web search results found.";
     } catch (e) {
-        console.error("DDG search error:", e.message);
+        console.error("Web search error:", e.message);
         return "Web search temporarily unavailable.";
     }
 }
@@ -504,7 +495,7 @@ app.post('/chat', async (req, res) => {
                 tasks.push(searchCVE(message).then(res => res ? "\n[CVE Database Result]:\n" + res + "\n" : ""));
             }
             if (/search|what is|who is|latest|news|today|how to/i.test(msgLower)) {
-                tasks.push(freeWebSearch(message).then(res => res ? "\n[Live Web Search Result - Double Checked]:\n" + res + "\n" : ""));
+                tasks.push(freeWebSearch(message).then(res => res ? "\n[Live Web Search Result - SearXNG & Wikipedia]:\n" + res + "\n" : ""));
             }
             if (msgLower.startsWith('/run ') || msgLower.startsWith('run code:')) {
                 const codeToRun = message.replace(/^\/run\s+|^run code:\s*/i, '');
