@@ -322,7 +322,7 @@ app.get('/', (req, res) => {
 
             let currentParts = [];
             if (mediaBase64 && mimeType) {
-                currentParts.push({ inline_data: { mime_type: mimeType, data: mediaBase64 } });
+                currentParts.push({ inlineData: { mimeType: mimeType, data: mediaBase64 } });
             }
             
             let finalText = text || "Please process attached file.";
@@ -333,8 +333,7 @@ app.get('/', (req, res) => {
             fileInput.value = '';
             document.getElementById('file-name').textContent = '';
 
-            let historyToSend = [...chatHistory]; 
-
+            let historyToSend = [...chatHistory];  
             if (!isCmd) {
                 chatHistory.push({ role: 'user', parts: currentParts });
                 renderChatBox();
@@ -489,12 +488,12 @@ app.post('/chat', async (req, res) => {
             }
         }
 
-        // 1. Correct REST API Property Format (inline_data & mime_type)
+        // 1. Strictly use CamelCase for Gemini REST JSON (inlineData & mimeType)
         const currentParts = [];
         if (media && mimeType) {
             currentParts.push({
-                inline_data: {
-                    mime_type: mimeType,
+                inlineData: {
+                    mimeType: mimeType,
                     data: media
                 }
             });
@@ -505,25 +504,36 @@ app.post('/chat', async (req, res) => {
         
         currentParts.push({ text: finalText });
 
-        // 2. Sanitize and Clean History Payload for Gemini REST API
+        // 2. Ultra-Strict History Sanitization (Removes any old broken structures)
         const sanitizedHistory = userHistory.map(item => {
             if (!item || !Array.isArray(item.parts)) return null;
+            
             const cleanParts = item.parts.map(part => {
                 if (part.text) return { text: part.text };
+                
+                // Handle both valid camelCase and old broken snake_case data if it exists in history
+                let mType, b64Data;
                 if (part.inlineData) {
+                    mType = part.inlineData.mimeType;
+                    b64Data = part.inlineData.data;
+                } else if (part.inline_data) {
+                    mType = part.inline_data.mime_type || part.inline_data.mimeType;
+                    b64Data = part.inline_data.data;
+                }
+
+                if (mType && b64Data) {
                     return {
-                        inline_data: {
-                            mime_type: part.inlineData.mimeType,
-                            data: part.inlineData.data
+                        inlineData: {
+                            mimeType: mType,
+                            data: b64Data
                         }
                     };
                 }
-                if (part.inline_data) return part;
                 return null;
-            }).filter(Boolean);
+            }).filter(Boolean); // Filters out any null/undefined parts
 
-            return cleanParts.length ? { role: item.role, parts: cleanParts } : null;
-        }).filter(Boolean);
+            return cleanParts.length > 0 ? { role: item.role, parts: cleanParts } : null;
+        }).filter(Boolean); // Filters out any messages with empty parts
 
         const contentsPayload = [...sanitizedHistory, { role: 'user', parts: currentParts }];
 
