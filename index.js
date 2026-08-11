@@ -28,7 +28,7 @@ function getDb() {
     }
 }
 
-// Timeout Wrapper Helper
+// Timeout Wrapper Helper function
 function fetchWithTimeout(url, options = {}, timeoutMs = 5000) {
     return Promise.race([
         fetchFn(url, options),
@@ -36,50 +36,71 @@ function fetchWithTimeout(url, options = {}, timeoutMs = 5000) {
     ]);
 }
 
-// 1. Web Search using SearXNG Public Instances & Wikipedia API (Duckduckgo completely removed)
+// 1. Enhanced Web Search using Multiple SearXNG Instances & Wikipedia Fallback Pool
 async function freeWebSearch(query) {
-    try {
-        const results = [];
+    const searxInstances = [
+        'https://searx.be',
+        'https://search.ononoki.org',
+        'https://searx.nameclue.xyz',
+        'https://baresearch.org',
+        'https://etsi.me'
+    ];
 
-        // Attempt 1: SearXNG Public Instance API
+    let results = [];
+
+    // Attempt 1: Iterate through SearXNG Rotation Pool
+    for (const instance of searxInstances) {
         try {
-            const searxRes = await fetchWithTimeout(`https://searx.be/search?q=${encodeURIComponent(query)}&format=json`, {
-                headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) StealthTechAI/1.0' }
-            });
-            const searxData = await searxRes.json();
-            if (searxData && Array.isArray(searxData.results) && searxData.results.length > 0) {
-                searxData.results.slice(0, 3).forEach(item => {
-                    if (item.title && item.content) {
-                        results.push(`- [Verified Source - SearXNG]: ${item.title}: ${item.content}`);
-                    }
-                });
+            const url = `${instance}/search?q=${encodeURIComponent(query)}&format=json`;
+            const searxRes = await fetchWithTimeout(url, {
+                headers: { 
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) StealthTechAI/2.0',
+                    'Accept': 'application/json'
+                }
+            }, 3000);
+            
+            if (searxRes.ok) {
+                const searxData = await searxRes.json();
+                if (searxData && Array.isArray(searxData.results) && searxData.results.length > 0) {
+                    searxData.results.slice(0, 3).forEach(item => {
+                        if (item.title && item.content) {
+                            results.push(`- [Verified Source (${instance})]: ${item.title} -> ${item.content}`);
+                        }
+                    });
+                    break; // Successfully fetched from instance pool
+                }
             }
         } catch (searxErr) {
-            console.error("SearXNG search warning:", searxErr.message);
+            // Silently fallback to next instance
+            continue;
         }
+    }
 
-        // If SearXNG got results, return them
-        if (results.length > 0) {
-            return results.join("\n");
-        }
+    if (results.length > 0) {
+        return results.join("\n");
+    }
 
-        // Attempt 2: Wikipedia API Fallback
-        const wikiRes = await fetchWithTimeout(`https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&format=json`, {
-            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) StealthTechAI/1.0' }
-        });
+    // Attempt 2: Wikipedia API Fallback
+    try {
+        const wikiUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&format=json`;
+        const wikiRes = await fetchWithTimeout(wikiUrl, {
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) StealthTechAI/2.0' }
+        }, 3000);
+        
         const wikiData = await wikiRes.json();
         if (wikiData?.query?.search && wikiData.query.search.length > 0) {
             wikiData.query.search.slice(0, 3).forEach(item => {
                 const cleanSnippet = item.snippet.replace(/<[^>]*>/g, '');
-                results.push(`- [Verified Fact - Wikipedia]: ${item.title}: ${cleanSnippet}`);
+                results.push(`- [Verified Fact - Wikipedia]: ${item.title} -> ${cleanSnippet}`);
             });
         }
-
-        return results.length ? results.join("\n") : "No direct web search results found.";
-    } catch (e) {
-        console.error("Web search error:", e.message);
-        return "Web search temporarily unavailable.";
+    } catch (wikiErr) {
+        console.error("Wikipedia fallback error:", wikiErr.message);
     }
+
+    return results.length > 0 
+        ? results.join("\n") 
+        : "No direct web search results found due to temporary network restrictions.";
 }
 
 // 2. Free Code Execution Sandbox via Piston API
@@ -354,8 +375,7 @@ app.get('/', (req, res) => {
             fileInput.value = '';
             document.getElementById('file-name').textContent = '';
 
-            let historyToSend = [...chatHistory];
-  
+            let historyToSend = [...chatHistory];   
             if (!isCmd) {
                 chatHistory.push({ role: 'user', parts: currentParts });
                 renderChatBox();
