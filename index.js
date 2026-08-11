@@ -230,7 +230,7 @@ app.get('/', (req, res) => {
 
                 if (Array.isArray(msg.parts)) {
                     textContent = msg.parts.map(p => p.text || "").filter(Boolean).join("\\n");
-                    if (!textContent && msg.parts.some(p => p.inlineData)) textContent = "[Attached File / Image]";
+                    if (!textContent && msg.parts.some(p => p.inlineData || p.inline_data)) textContent = "[Attached File / Image]";
                 }
 
                 if (isUser) {
@@ -321,7 +321,9 @@ app.get('/', (req, res) => {
             }
 
             let currentParts = [];
-            if (mediaBase64 && mimeType) currentParts.push({ inlineData: { mimeType, data: mediaBase64 } });
+            if (mediaBase64 && mimeType) {
+                currentParts.push({ inline_data: { mime_type: mimeType, data: mediaBase64 } });
+            }
             
             let finalText = text || "Please process attached file.";
             if (file) finalText += " [Attached: " + file.name + "]";
@@ -331,8 +333,6 @@ app.get('/', (req, res) => {
             fileInput.value = '';
             document.getElementById('file-name').textContent = '';
 
-            // ⚠️ FIX: Frontend UI එකට විතරක් අලුත් මැසේජ් එක දාගන්නවා. 
-            // Backend එකට යවනකොට යවන්නේ පරණ history එක විතරයි. එතකොට backend එකෙන් අලුත් මැසේජ් එක add කරගන්නවා. (Duplicate error එක නැති වෙනවා)
             let historyToSend = [...chatHistory]; 
 
             if (!isCmd) {
@@ -348,7 +348,7 @@ app.get('/', (req, res) => {
                         message: text,
                         media: mediaBase64,
                         mimeType,
-                        history: historyToSend, // ⚠️ FIX: යවන්නේ slice කරපු නිවැරදි history එකයි
+                        history: historyToSend,
                         isOwnerMode,
                         clientId
                     })
@@ -362,11 +362,10 @@ app.get('/', (req, res) => {
                     updateTitle();
                 }
 
-                // ⚠️ FIX: Backend error ආවොත් ඒක පැහැදිලිව පෙන්වන්න හදලා තියෙන්නේ.
                 if (data.response && data.response.startsWith("Backend Error")) {
                     chatBox.innerHTML += '<div class="message-container ai-container"><div class="message ai" style="color:#ff7b72;">⚠️ <b>' + escapeHtml(data.response) + '</b></div></div>';
                     scrollToBottom();
-                    chatHistory.pop(); // Error ආවොත් අන්තිමට දාපු message එක අයින් කරනවා
+                    chatHistory.pop();
                     return;
                 }
 
@@ -490,16 +489,43 @@ app.post('/chat', async (req, res) => {
             }
         }
 
+        // 1. Correct REST API Property Format (inline_data & mime_type)
         const currentParts = [];
-        if (media && mimeType) currentParts.push({ inlineData: { mimeType, data: media } });
+        if (media && mimeType) {
+            currentParts.push({
+                inline_data: {
+                    mime_type: mimeType,
+                    data: media
+                }
+            });
+        }
         
         let finalText = message || "Please process attached file.";
         if (additionalContext) finalText += "\n\nFetched System Context:\n" + additionalContext;
         
         currentParts.push({ text: finalText });
 
-        // ⚠️ FIX: Frontend එකෙන් එවන history එකට අලුත් message එක මෙතනදී විතරක් එකතු වෙනවා.
-        const contentsPayload = [...userHistory, { role: 'user', parts: currentParts }];
+        // 2. Sanitize and Clean History Payload for Gemini REST API
+        const sanitizedHistory = userHistory.map(item => {
+            if (!item || !Array.isArray(item.parts)) return null;
+            const cleanParts = item.parts.map(part => {
+                if (part.text) return { text: part.text };
+                if (part.inlineData) {
+                    return {
+                        inline_data: {
+                            mime_type: part.inlineData.mimeType,
+                            data: part.inlineData.data
+                        }
+                    };
+                }
+                if (part.inline_data) return part;
+                return null;
+            }).filter(Boolean);
+
+            return cleanParts.length ? { role: item.role, parts: cleanParts } : null;
+        }).filter(Boolean);
+
+        const contentsPayload = [...sanitizedHistory, { role: 'user', parts: currentParts }];
 
         const todayLine = "Today's real date is " + getTodayString() + ". ";
         const systemPrompt = isOwnerMode
@@ -517,7 +543,6 @@ app.post('/chat', async (req, res) => {
             ]
         };
 
-        // ⚠️ FIX: නිවැරදි Gemini Model Name එක භාවිතා කර ඇත (gemini-3.5-flash-lite)
         const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=" + apiKey;
 
         const apiRes = await fetchFn(url, {
@@ -573,4 +598,3 @@ if (process.env.NODE_ENV !== 'production') {
 }
 
 module.exports = app;
-
