@@ -26,34 +26,33 @@ function getDb() {
     }
 }
 
-function fetchWithTimeout(url, options = {}, timeoutMs = 5000) {
+function fetchWithTimeout(url, options = {}, timeoutMs = 6000) {
     return Promise.race([
         fetchFn(url, options),
         new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), timeoutMs))
     ]);
 }
 
-// Web Search Function
 async function freeWebSearch(query) {
     let results = [];
     try {
         const ddgUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
         const ddgRes = await fetchWithTimeout(ddgUrl, {
             headers: { 
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
                 'Accept-Language': 'en-US,en;q=0.9'
             }
-        }, 4000);
+        }, 5000);
 
         if (ddgRes.ok) {
             const htmlText = await ddgRes.text();
             const snippetRegex = /<a class="result__snippet[^">]*">([\s\S]*?)<\/a>/g;
             let match;
             let count = 0;
-            while ((match = snippetRegex.exec(htmlText)) !== null && count < 3) {
+            while ((match = snippetRegex.exec(htmlText)) !== null && count < 4) {
                 const cleanSnippet = match[1].replace(/<[^>]*>/g, '').trim();
                 if (cleanSnippet) {
-                    results.push(`- ${cleanSnippet}`);
+                    results.push(cleanSnippet);
                     count++;
                 }
             }
@@ -62,32 +61,32 @@ async function freeWebSearch(query) {
         console.error("DuckDuckGo error:", err.message);
     }
 
-    if (results.length > 0) return results.join("\n");
+    if (results.length > 0) return results.join(" \n ");
 
-    // Wikipedia Fallback
     try {
         const wikiUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&format=json`;
-        const wikiRes = await fetchWithTimeout(wikiUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } }, 3000);
+        const wikiRes = await fetchWithTimeout(wikiUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } }, 4000);
         const wikiData = await wikiRes.json();
         if (wikiData?.query?.search && wikiData.query.search.length > 0) {
-            wikiData.query.search.slice(0, 2).forEach(item => {
-                results.push(`- ${item.title}: ${item.snippet.replace(/<[^>]*>/g, '')}`);
+            wikiData.query.search.slice(0, 3).forEach(item => {
+                results.push(`${item.title}: ${item.snippet.replace(/<[^>]*>/g, '')}`);
             });
         }
     } catch (e) {
         console.error("Wikipedia error:", e.message);
     }
 
-    return results.length > 0 ? results.join("\n") : null;
+    return results.length > 0 ? results.join(" \n ") : null;
 }
 
+// Piston API Code Execution Support Restored
 async function executeCodeInSandbox(language, code) {
     try {
         const res = await fetchWithTimeout('https://emkc.org/api/v2/piston/execute', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ language: language || 'python', version: '*', files: [{ content: code }] })
-        }, 4000);
+        }, 5000);
         const data = await res.json();
         return data?.run?.output || data?.run?.stderr || "Executed with no output.";
     } catch (e) {
@@ -151,7 +150,6 @@ app.get('/', (req, res) => {
         .copy-msg-btn { align-self: flex-start; margin-top: 2px; }
         .copy-code-btn:hover, .copy-msg-btn:hover { background: #30363d; color: #fff; }
         
-        /* Live Status Indicator for Search */
         #status-bar { padding: 6px 20px; font-size: 12.5px; color: #58a6ff; background: #161b22; border-top: 1px solid #30363d; display: none; align-items: center; gap: 8px; }
         .spinner { width: 12px; height: 12px; border: 2px solid #58a6ff; border-top: 2px solid transparent; border-radius: 50%; animation: spin 0.8s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
@@ -314,7 +312,6 @@ app.get('/', (req, res) => {
             if (mediaBase64 && mimeType) currentParts.push({ inline_data: { mime_type: mimeType, data: mediaBase64 } });
             
             let finalText = text || "Please process attached file.";
-            if (file) finalText += " [Attached: " + file.name + "]";
             currentParts.push({ text: finalText });
 
             input.value = '';
@@ -325,8 +322,12 @@ app.get('/', (req, res) => {
             chatHistory.push({ role: 'user', parts: currentParts });
             renderChatBox();
 
-            // Show live status indicator if looking like a search query
-            showStatus("Processing query...");
+            // Check if query likely needs search to show status bar only when searching
+            const msgLower = text.toLowerCase();
+            const needsSearch = /search|what is|who is|latest|news|today|how to|aluth|mokakda|kohomada|price|version|release|current|weather|who|when|where/i.test(msgLower) || text.length > 15;
+            if (needsSearch && !['hi', 'hello', 'hey', 'ela', 'kohomada', 'gm', 'gn'].includes(msgLower)) {
+                showStatus("Searching live web data...");
+            }
 
             try {
                 const res = await fetch('/chat', {
@@ -421,7 +422,7 @@ app.post('/chat', async (req, res) => {
             return res.json({ response: "🔒 Exited Owner Mode.", history: normalHist, isOwnerMode: false });
         }
 
-        let additionalContext = "";
+        let searchContext = "";
         if (message) {
             const msgLower = message.toLowerCase();
             const tasks = [];
@@ -433,30 +434,44 @@ app.post('/chat', async (req, res) => {
             if (msgLower.includes('cve') || msgLower.includes('vulnerability')) {
                 tasks.push(searchCVE(message).then(res => res ? "\n[CVE DB]:\n" + res + "\n" : ""));
             }
+            // Piston Sandbox Code Execution Handler Restored
             if (msgLower.startsWith('/run ') || msgLower.startsWith('run code:')) {
                 tasks.push(executeCodeInSandbox('python', message.replace(/^\/run\s+|^run code:\s*/i, '')).then(res => res ? "\n[Sandbox Out]:\n" + res + "\n" : ""));
             }
 
-            // SMART TRIGGER: Only web search if the query explicitly needs current facts, news, latest details, or is an informational question that needs web data
             const needsSearch = /search|what is|who is|latest|news|today|how to|aluth|mokakda|kohomada|price|version|release|current|weather|who|when|where/i.test(msgLower) || message.length > 15;
-            
-            if (needsSearch && !msgLower.startsWith('hi') && !msgLower.startsWith('hello') && !msgLower.startsWith('ela')) {
+
+            if (needsSearch && !['hi', 'hello', 'hey', 'ela', 'kohomada', 'gm', 'gn'].includes(msgLower)) {
                 const searchRes = await freeWebSearch(message);
-                if (searchRes) additionalContext += "\n[Live Web Search Result]:\n" + searchRes + "\n";
+                if (searchRes) {
+                    searchContext = searchRes;
+                }
+            }
+
+            if (tasks.length > 0) {
+                const results = await Promise.allSettled(tasks);
+                results.forEach(result => {
+                    if (result.status === 'fulfilled' && result.value) searchContext += "\n" + result.value;
+                });
             }
         }
 
         const currentParts = [];
         if (media && mimeType) currentParts.push({ inline_data: { mime_type: mimeType, data: media } });
         
-        let finalText = message || "Please process attached file.";
-        if (additionalContext) finalText += "\n\nVerified External Data:\n" + additionalContext;
+        let finalText = message;
+        if (searchContext) {
+            finalText += "\n\n[Live Internet Search Findings to use for accurate real-time response]:\n" + searchContext;
+        }
         currentParts.push({ text: finalText });
 
         const sanitizedHistory = userHistory.map(item => {
             if (!item || !Array.isArray(item.parts)) return null;
             const cleanParts = item.parts.map(part => {
-                if (part.text) return { text: part.text };
+                if (part.text) {
+                    let cleanTxt = part.text.split("\n\n[Live Internet Search Findings")[0];
+                    return { text: cleanTxt };
+                }
                 if (part.inline_data && part.inline_data.data) return { inline_data: { mime_type: part.inline_data.mime_type, data: part.inline_data.data } };
                 return null;
             }).filter(Boolean);
@@ -467,8 +482,8 @@ app.post('/chat', async (req, res) => {
         const todayLine = "Today's real date is " + getTodayString() + ". ";
 
         const systemPrompt = isOwnerMode
-            ? todayLine + "You are in Owner Mode. Advanced technical systems and tactical guide. Do not rush to write code unless asked."
-            : todayLine + "You are a technical assistant. Answer strictly in Sinhala based on verified data.";
+            ? todayLine + "You are in Owner Mode, an advanced technical and real-time research assistant. Always utilize the provided Live Internet Search Findings to answer current questions accurately and comprehensively. Never say you are cut off from the internet if search findings are available."
+            : todayLine + "You are a technical assistant. Answer strictly in Sinhala using the provided live internet search data for any current or recent queries.";
 
         const payload = {
             contents: contentsPayload,
@@ -499,7 +514,11 @@ app.post('/chat', async (req, res) => {
         }
 
         let newHistory = [...userHistory];
-        newHistory.push({ role: 'user', parts: currentParts });
+        let cleanStoredParts = [];
+        if (media && mimeType) cleanStoredParts.push({ inline_data: { mime_type: mimeType, data: media } });
+        cleanStoredParts.push({ text: message });
+
+        newHistory.push({ role: 'user', parts: cleanStoredParts });
         newHistory.push({ role: 'model', parts: [{ text: aiResponseText }] });
         if (newHistory.length > 20) newHistory = newHistory.slice(newHistory.length - 20);
 
