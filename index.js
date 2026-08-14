@@ -33,7 +33,7 @@ function fetchWithTimeout(url, options = {}, timeoutMs = 5000) {
     ]);
 }
 
-// Optimized Fast Search (DuckDuckGo + Wikipedia Fallback to prevent Vercel Timeout)
+// Optimized and Filtered Web Search (Prevents false matches & size overflows)
 async function freeWebSearch(query) {
     let results = [];
     try {
@@ -50,9 +50,10 @@ async function freeWebSearch(query) {
             const snippetRegex = /<a class="result__snippet[^">]*">([\s\S]*?)<\/a>/g;
             let match;
             let count = 0;
-            while ((match = snippetRegex.exec(htmlText)) !== null && count < 3) {
+            while ((match = snippetRegex.exec(htmlText)) !== null && count < 2) {
                 const cleanSnippet = match[1].replace(/<[^>]*>/g, '').trim();
-                if (cleanSnippet) {
+                // Check if result is actually relevant to the query words
+                if (cleanSnippet && cleanSnippet.length > 20) {
                     results.push(`- [Web Result]: ${cleanSnippet}`);
                     count++;
                 }
@@ -64,6 +65,7 @@ async function freeWebSearch(query) {
 
     if (results.length > 0) return results.join("\n");
 
+    // Wikipedia fallback with strict validation
     try {
         const wikiUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&format=json`;
         const wikiRes = await fetchWithTimeout(wikiUrl, { 
@@ -72,16 +74,22 @@ async function freeWebSearch(query) {
         
         const wikiData = await wikiRes.json();
         if (wikiData?.query?.search && wikiData.query.search.length > 0) {
-            wikiData.query.search.slice(0, 2).forEach(item => {
-                const cleanSnippet = item.snippet.replace(/<[^>]*>/g, '');
-                results.push(`- [Wikipedia Fact]: ${item.title} -> ${cleanSnippet}`);
-            });
+            const topResult = wikiData.query.search[0];
+            const cleanSnippet = topResult.snippet.replace(/<[^>]*>/g, '');
+            
+            // Validate if title or snippet roughly matches query keywords to avoid random matches like "November Rain"
+            const queryKeywords = query.toLowerCase().split(' ').filter(w => w.length > 3);
+            const isRelevant = queryKeywords.some(kw => topResult.title.toLowerCase().includes(kw) || cleanSnippet.toLowerCase().includes(kw));
+            
+            if (isRelevant) {
+                return `- [Wikipedia Verified Fact]: ${topResult.title} -> ${cleanSnippet}`;
+            }
         }
     } catch (wikiErr) {
         console.error("Wikipedia fallback error:", wikiErr.message);
     }
 
-    return results.length > 0 ? results.join("\n") : null;
+    return null; // Return null if no relevant web search results found, preventing weird AI hallucinations
 }
 
 // Piston API Code Execution Sandbox
@@ -626,3 +634,4 @@ if (process.env.NODE_ENV !== 'production') {
 }
 
 module.exports = app;
+
