@@ -33,35 +33,25 @@ function fetchWithTimeout(url, options = {}, timeoutMs = 6000) {
     ]);
 }
 
-// Real Web Search via DuckDuckGo HTML Scraping (No API Key Required)
-async function searchWebDuckDuckGo(query) {
+// Official Web Search via SerpApi
+async function searchWithSerpApi(query) {
     try {
-        const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
-        const res = await fetchWithTimeout(url, { 
-            headers: { 
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' 
-            } 
-        }, 6000);
-        const html = await res.text();
-        
-        // Extract search result snippets using regex
-        const results = [];
-        const snippetRegex = /<a[^>]*class="result__snippet[^>]*>([\s\S]*?)<\/a>/gi;
-        let match;
-        let count = 0;
-        
-        while ((match = snippetRegex.exec(html)) !== null && count < 5) {
-            let cleanText = match[1].replace(/<[^>]*>/g, '').trim();
-            if (cleanText && !results.includes(cleanText)) {
-                results.push(`• ${cleanText}`);
-                count++;
-            }
-        }
-        
-        if (results.length === 0) return null;
-        return "[Web Search Results via DuckDuckGo]:\n" + results.join("\n");
+        const apiKey = process.env.SERPAPI_API_KEY;
+        if (!apiKey) return null;
+
+        const url = `https://serpapi.com/search.json?q=${encodeURIComponent(query)}&engine=google&api_key=${apiKey}&hl=en`;
+        const res = await fetchWithTimeout(url, {}, 6000);
+        const data = await res.json();
+
+        if (!data.organic_results || !data.organic_results.length) return null;
+
+        const results = data.organic_results.slice(0, 5).map(item => {
+            return `• ${item.title}: ${item.snippet || ''}`;
+        });
+
+        return "[Web Search Results via SerpApi]:\n" + results.join("\n");
     } catch (e) {
-        console.error("Web search error:", e.message);
+        console.error("SerpApi search error:", e.message);
         return null;
     }
 }
@@ -488,13 +478,13 @@ app.post('/chat', async (req, res) => {
                 tasks.push(executeCodeInSandbox('python', codeToRun).then(res => res ? "\n[Sandbox Execution Output]:\n" + res + "\n" : ""));
             }
 
-            // AI Powered Smart Web Search with Web Scraping Fallback (Supports Sinhala/Hinglish/English input)
-            if (msgLower.match(/search|shearch|serch|latest|news|who is|what is|kauru da|mokak da|liak|leak|kisiwa/)) {
+            // AI Powered Smart Web Search via SerpApi (Supports Sinhala/Hinglish/English input)
+            if (msgLower.match(/search|shearch|serch|latest|news|who is|what is|kauru da|mokak da|liak|leak|kisiwa|gta/)) {
                 tasks.push((async () => {
                     try {
                         const keywordPrompt = `Convert and extract the core search terms into 2-4 English keywords for a web search about video games, leaks, hackers, or tech news. The input text can be in Hinglish, Sinhala, or English. Text: "${message}"`;
                         
-                        const kwRes = await fetchFn(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+                        const kwRes = await fetchFn(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${apiKey}`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
@@ -507,7 +497,7 @@ app.post('/chat', async (req, res) => {
                         smartQuery = smartQuery.replace(/["'\n]/g, '');
                         
                         if (smartQuery && smartQuery.length > 2) {
-                            const searchResult = await searchWebDuckDuckGo(smartQuery);
+                            const searchResult = await searchWithSerpApi(smartQuery);
                             return searchResult ? `\n[Web Search Results for "${smartQuery}"]:\n` + searchResult + "\n" : "";
                         }
                     } catch (err) {
@@ -646,4 +636,3 @@ if (process.env.NODE_ENV !== 'production') {
 }
 
 module.exports = app;
-
