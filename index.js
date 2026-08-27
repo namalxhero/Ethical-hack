@@ -26,30 +26,36 @@ function getDb() {
     }
 }
 
-function fetchWithTimeout(url, options = {}, timeoutMs = 5000) {
+function fetchWithTimeout(url, options = {}, timeoutMs = 6000) {
     return Promise.race([
         fetchFn(url, options),
         new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), timeoutMs))
     ]);
 }
 
-// Free DuckDuckGo Web Search API Integration (No API Key Required)
+// Improved Real Web Search via DuckDuckGo HTML Scraping (No API Key Required)
 async function searchWebDuckDuckGo(query) {
     try {
-        const url = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`;
-        const res = await fetchWithTimeout(url, { headers: { 'User-Agent': 'Mozilla/5.0' } }, 5000);
-        const data = await res.json();
+        const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+        const res = await fetchWithTimeout(url, { 
+            headers: { 
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' 
+            } 
+        }, 6000);
+        const html = await res.text();
         
-        let results = [];
-        if (data.AbstractText) {
-            results.push(`• Summary: ${data.AbstractText} (${data.AbstractURL})`);
-        }
-        if (Array.isArray(data.RelatedTopics)) {
-            data.RelatedTopics.slice(0, 3).forEach(topic => {
-                if (topic.Text && topic.FirstURL) {
-                    results.push(`• ${topic.Text} - ${topic.FirstURL}`);
-                }
-            });
+        // Extract search result snippets using regex
+        const results = [];
+        const snippetRegex = /<a[^>]*class="result__snippet[^>]*>([\s\S]*?)<\/a>/gi;
+        let match;
+        let count = 0;
+        
+        while ((match = snippetRegex.exec(html)) !== null && count < 5) {
+            let cleanText = match[1].replace(/<[^>]*>/g, '').trim();
+            if (cleanText && !results.includes(cleanText)) {
+                results.push(`• ${cleanText}`);
+                count++;
+            }
         }
         
         if (results.length === 0) return null;
@@ -482,11 +488,11 @@ app.post('/chat', async (req, res) => {
                 tasks.push(executeCodeInSandbox('python', codeToRun).then(res => res ? "\n[Sandbox Execution Output]:\n" + res + "\n" : ""));
             }
 
-            // AI Powered Smart Web Search with typo support (search, shearch, serch)
+            // AI Powered Smart Web Search with Web Scraping Fallback
             if (msgLower.match(/search|shearch|serch|latest|news|who is|what is/)) {
                 tasks.push((async () => {
                     try {
-                        const keywordPrompt = `Convert this Singlish/Sinhala text into a short, concise English search query (keywords only, maximum 3-4 words). Ignore typos and conversational words. Output ONLY the English keywords. Text: "${message}"`;
+                        const keywordPrompt = `Extract the core search terms from this text for a web search about video games, leaks, hackers, or tech news. Output ONLY 2-4 English keywords. Text: "${message}"`;
                         
                         const kwRes = await fetchFn(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
                             method: 'POST',
