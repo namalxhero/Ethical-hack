@@ -41,11 +41,11 @@ async function searchWithSerpApi(query) {
             throw new Error("SERPAPI_API_KEY is missing in environment variables.");
         }
 
-        const url = `https://serpapi.com/search.json?q=${encodeURIComponent(query)}&engine=google&api_key=${apiKey}&hl=en`;
+        const url = 'https://serpapi.com/search.json?q=' + encodeURIComponent(query) + '&engine=google&api_key=' + apiKey + '&hl=en';
         const res = await fetchWithTimeout(url, {}, 6000);
         
         if (!res.ok) {
-            throw new Error(`SerpApi responded with status ${res.status}`);
+            throw new Error('SerpApi responded with status ' + res.status);
         }
 
         const data = await res.json();
@@ -55,7 +55,7 @@ async function searchWithSerpApi(query) {
         }
 
         const results = data.organic_results.slice(0, 5).map(item => {
-            return `• ${item.title}: ${item.snippet || ''}`;
+            return '• ' + item.title + ': ' + (item.snippet || '');
         });
 
         return "[Web Search Results via SerpApi]:\n" + results.join("\n");
@@ -87,11 +87,11 @@ async function executeCodeInSandbox(language, code) {
 
 async function searchCVE(query) {
     try {
-        const res = await fetchWithTimeout(`https://cve.circl.lu/api/search/${encodeURIComponent(query)}`, {}, 4000);
+        const res = await fetchWithTimeout('https://cve.circl.lu/api/search/' + encodeURIComponent(query), {}, 4000);
         const data = await res.json();
 
         if (!Array.isArray(data) || !data.length) return null;
-        return data.slice(0, 3).map(item => `• ${item.id}: ${item.summary || 'No summary available'}`).join("\n");
+        return data.slice(0, 3).map(item => '• ' + item.id + ': ' + (item.summary || 'No summary available')).join("\n");
     } catch (e) {
         console.error("CVE search error:", e.message);
         return null;
@@ -100,11 +100,11 @@ async function searchCVE(query) {
 
 async function scanIPAddress(ip) {
     try {
-        const res = await fetchWithTimeout(`http://ip-api.com/json/${encodeURIComponent(ip)}?fields=status,message,country,isp,org,as,query`, {}, 3000);
+        const res = await fetchWithTimeout('http://ip-api.com/json/' + encodeURIComponent(ip) + '?fields=status,message,country,isp,org,as,query', {}, 3000);
         const data = await res.json();
 
         if (data.status !== 'success') return "IP Scanning failed or invalid IP.";
-        return `• IP: ${data.query}\n• Country: ${data.country}\n• ISP: ${data.isp}\n• Org: ${data.org}`;
+        return '• IP: ' + data.query + '\n• Country: ' + data.country + '\n• ISP: ' + data.isp + '\n• Org: ' + data.org;
     } catch (e) {
         console.error("IP Scan error:", e.message);
         return null;
@@ -115,7 +115,7 @@ function getTodayString() {
     const now = new Date();
     const dateStr = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Colombo' });
     const weekday = now.toLocaleDateString('en-US', { timeZone: 'Asia/Colombo', weekday: 'long' });
-    return `${weekday}, ${dateStr}`;
+    return weekday + ', ' + dateStr;
 }
 
 app.get('/', (req, res) => {
@@ -235,7 +235,7 @@ app.get('/', (req, res) => {
                     textContent = msg.content;
                 } else if (Array.isArray(msg.content)) {
                     msg.content.forEach(p => {
-                        if (p.text) textContent += (textContent ? "\n" : "") + p.text;
+                        if (p.text) textContent += (textContent ? "\\n" : "") + p.text;
                         if (p.mediaUrl) {
                             mediaUrl = p.mediaUrl;
                             mediaType = p.mediaType || 'image';
@@ -314,10 +314,10 @@ app.get('/', (req, res) => {
             });
         }
 
-        // Image සහ Video 2ම Cloudinary එකට Unsigned Upload වෙන Function එක
+        // Image සහ Video 2ම Cloudinary එකට Unsigned Upload වෙන Function එක (Syntax error fixed)
         async function uploadToCloudinary(file) {
-            const cloudName = 'ydcio1sj';     // ඔයාගේ Cloud / Environment Name එක
-            const uploadPreset = 'ml_default'; // ඔයාගේ Unsigned Upload Preset එක
+            const cloudName = 'ydcio1sj';
+            const uploadPreset = 'ml_default';
 
             const isVideo = file.type.startsWith('video/');
             const resourceType = isVideo ? 'video' : 'image';
@@ -326,7 +326,10 @@ app.get('/', (req, res) => {
             formData.append('file', file);
             formData.append('upload_preset', uploadPreset);
 
-            const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/${resourceType}/upload`, {
+            // Fetch URL string concatenated normally without backticks to prevent syntax errors
+            const uploadUrl = 'https://api.cloudinary.com/v1_1/' + cloudName + '/' + resourceType + '/upload';
+
+            const res = await fetch(uploadUrl, {
                 method: 'POST',
                 body: formData
             });
@@ -513,28 +516,24 @@ app.post('/chat', async (req, res) => {
             const msgLower = message.toLowerCase();
             const tasks = [];
 
-            // IP scan task
             const ipMatch = message.match(/\b(?:\d{1,3}\.){3}\d{1,3}\b/);
             if (ipMatch && (msgLower.includes('scan') || msgLower.includes('ip'))) {
                 tasks.push(scanIPAddress(ipMatch[0]).then(res => res ? "\n[IP Intelligence Scan]:\n" + res + "\n" : ""));
             }
-            // CVE task
             if (msgLower.includes('cve') || msgLower.includes('vulnerability') || msgLower.includes('exploit')) {
                 tasks.push(searchCVE(message).then(res => res ? "\n[CVE Database Result]:\n" + res + "\n" : ""));
             }
-            // Code run task
             if (message.startsWith('/run ') || message.startsWith('run code:')) {
                 const codeToRun = message.replace(/^\/run\s+|^run code:\s*/i, '');
                 tasks.push(executeCodeInSandbox('python', codeToRun).then(res => res ? "\n[Sandbox Execution Output]:\n" + res + "\n" : ""));
             }
 
-            // AI Powered Smart Web Search via SerpApi
             if (msgLower.match(/search|shearch|serch|latest|news|who is|what is|kauru da|mokak da|liak|leak|kisiwa|gta/)) {
                 tasks.push((async () => {
                     try {
-                        const keywordPrompt = `Convert and extract the core search terms into 2-4 English keywords for a web search about video games, leaks, hackers, or tech news. The input text can be in Hinglish, Sinhala, or English. Text: "${message}"`;
+                        const keywordPrompt = `Convert and extract the core search terms into 2-4 English keywords for a web search. Text: "${message}"`;
                         
-                        const kwRes = await fetchFn(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${apiKey}`, {
+                        const kwRes = await fetchFn('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=' + apiKey, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
@@ -548,13 +547,13 @@ app.post('/chat', async (req, res) => {
                         
                         if (smartQuery && smartQuery.length > 2) {
                             const searchResult = await searchWithSerpApi(smartQuery);
-                            return searchResult ? `\n[Web Search Results for "${smartQuery}"]:\n` + searchResult + "\n" : "";
+                            return searchResult ? "\n[Web Search Results for '" + smartQuery + "']:\n" + searchResult + "\n" : "";
                         } else {
                             throw new Error("Search failed: Could not extract valid search keywords.");
                         }
                     } catch (err) {
                         console.error("Smart search error:", err.message);
-                        return `\n[Web Search Error]: Search failed or not working: ${err.message}\n`;
+                        return "\n[Web Search Error]: Search failed or not working: " + err.message + "\n";
                     }
                 })());
             }
@@ -569,7 +568,6 @@ app.post('/chat', async (req, res) => {
 
         const currentParts = [];
         
-        // Cloudinary Media URL එකෙන් Gemini එකට temporarily Base64 convert කරලා යැවීම
         if (mediaUrl && mediaType === 'image') {
             try {
                 const imgFetch = await fetchFn(mediaUrl);
@@ -636,7 +634,7 @@ app.post('/chat', async (req, res) => {
             ]
         };
 
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${apiKey}`;
+        const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=' + apiKey;
 
         const apiRes = await fetchFn(url, {
             method: 'POST',
@@ -662,7 +660,6 @@ app.post('/chat', async (req, res) => {
             aiResponseText = "⚠️ මට හරියටම තේරුණේ නැහැ. කරුණාකර නැවත කියන්න.";
         }
 
-        // Firestore එකට Save කරන්නේ Text එකයි Cloudinary URL එකයි විතරයි
         let historyParts = [];
         if (mediaUrl) historyParts.push({ mediaUrl, mediaType });
         if (message) historyParts.push({ text: message });
