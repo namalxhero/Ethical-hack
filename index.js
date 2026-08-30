@@ -61,7 +61,6 @@ async function searchWithSerpApi(query) {
         return "[Web Search Results via SerpApi]:\n" + results.join("\n");
     } catch (e) {
         console.error("SerpApi search error:", e.message);
-        // මෙන්න මෙතැනදී සර්ච් එක වැඩ නැත්නම් හරියටම error එකක් return කරයි
         throw new Error("Search failed: " + e.message);
     }
 }
@@ -156,6 +155,7 @@ app.get('/', (req, res) => {
         button.send-btn { background: var(--accent); color: #fff; border: none; padding: 12px 24px; border-radius: 25px; cursor: pointer; font-weight: 600; font-size: 14px; }
         #file-name { font-size: 12px; color: #8b949e; max-width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         #owner-badge { font-size: 11px; background: #da3633; color: white; padding: 2px 8px; border-radius: 10px; margin-left: 8px; display: none; }
+        .media-preview { max-width: 250px; border-radius: 8px; margin-top: 8px; display: block; }
     </style>
 </head>
 <body>
@@ -168,7 +168,7 @@ app.get('/', (req, res) => {
     <div id="chat-box"></div>
     <div id="input-area">
         <label for="media-file" class="file-btn">📎</label>
-        <input type="file" id="media-file" accept="image/*,.txt,.py,.js,.json" onchange="showFileName()">
+        <input type="file" id="media-file" accept="image/*,video/*,.txt,.py,.js,.json" onchange="showFileName()">
         <span id="file-name"></span>
         <input type="text" id="user-input" placeholder="Type your message here..." onkeydown="if(event.key === 'Enter'){ sendMessage(); }">
         <button class="send-btn" onclick="sendMessage()">Send</button>
@@ -228,16 +228,32 @@ app.get('/', (req, res) => {
             chatHistory.forEach(msg => {
                 const isUser = msg.role === 'user';
                 let textContent = "";
+                let mediaUrl = "";
+                let mediaType = "";
 
                 if (typeof msg.content === 'string') {
                     textContent = msg.content;
                 } else if (Array.isArray(msg.content)) {
-                    textContent = msg.content.map(p => p.text || "").filter(Boolean).join("\\n");
-                    if (!textContent && msg.content.some(p => p.inlineData || p.type === 'image')) textContent = "[Attached File / Image]";
+                    msg.content.forEach(p => {
+                        if (p.text) textContent += (textContent ? "\n" : "") + p.text;
+                        if (p.mediaUrl) {
+                            mediaUrl = p.mediaUrl;
+                            mediaType = p.mediaType || 'image';
+                        }
+                    });
+                }
+
+                let mediaHtml = '';
+                if (mediaUrl) {
+                    if (mediaType === 'video') {
+                        mediaHtml = '<video src="' + escapeHtml(mediaUrl) + '" controls class="media-preview"></video>';
+                    } else {
+                        mediaHtml = '<img src="' + escapeHtml(mediaUrl) + '" class="media-preview" />';
+                    }
                 }
 
                 if (isUser) {
-                    html += '<div class="message-container user-container"><div class="message user"><div>' + escapeHtml(textContent) + '</div></div></div>';
+                    html += '<div class="message-container user-container"><div class="message user"><div>' + escapeHtml(textContent) + '</div>' + mediaHtml + '</div></div>';
                 } else {
                     html += '<div class="message-container ai-container"><div class="message ai">' + marked.parse(textContent || '') + '</div><button class="copy-msg-btn" data-text="' + escapeHtml(textContent) + '">Copy Response</button></div>';
                 }
@@ -298,6 +314,32 @@ app.get('/', (req, res) => {
             });
         }
 
+        // Image සහ Video 2ම Cloudinary එකට Unsigned Upload වෙන Function එක
+        async function uploadToCloudinary(file) {
+            const cloudName = 'ydcio1sj';     // ඔයාගේ Cloud / Environment Name එක
+            const uploadPreset = 'ml_default'; // ඔයාගේ Unsigned Upload Preset එක
+
+            const isVideo = file.type.startsWith('video/');
+            const resourceType = isVideo ? 'video' : 'image';
+
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('upload_preset', uploadPreset);
+
+            const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/${resourceType}/upload`, {
+                method: 'POST',
+                body: formData
+            });
+
+            if (!res.ok) {
+                const errData = await res.json();
+                throw new Error(errData.error?.message || "Cloudinary upload failed.");
+            }
+
+            const data = await res.json();
+            return { url: data.secure_url, type: resourceType };
+        }
+
         async function sendMessage() {
             const input = document.getElementById('user-input');
             const fileInput = document.getElementById('media-file');
@@ -308,34 +350,32 @@ app.get('/', (req, res) => {
             if (!text && !file) return;
 
             const isCmd = text === '/owner' || text === '/exit';
-            let mediaBase64 = null, mimeType = null;
+            let mediaUrl = null, mediaType = null;
             
+            // Image / Video නම් Cloudinary එකට upload වෙයි
             if (file) {
-                if (file.size > 4 * 1024 * 1024) return alert("File size too large! Max 4MB.");
-                mimeType = file.type || 'text/plain';
-                const base64Full = await new Promise(res => {
-                    const r = new FileReader();
-                    r.readAsDataURL(file);
-                    r.onload = () => res(r.result);
-                    r.onerror = () => res(null);
-                });
-                if (!base64Full) return alert("Failed to read the file.");
-                mediaBase64 = base64Full.split(',')[1];
+                const mimeType = file.type || '';
+                if (mimeType.startsWith('image/') || mimeType.startsWith('video/')) {
+                    try {
+                        const uploaded = await uploadToCloudinary(file);
+                        mediaUrl = uploaded.url;
+                        mediaType = uploaded.type;
+                    } catch(e) {
+                        return alert("Cloudinary Media upload failed: " + e.message);
+                    }
+                } else {
+                    return alert("කරුණාකර Image හෝ Video ෆයිල් එකක් පමණක් තෝරන්න.");
+                }
             }
 
             let currentParts = [];
-            if (mediaBase64 && mimeType && mimeType.startsWith('image/')) {
-                currentParts.push({
-                    inlineData: {
-                        mimeType: mimeType,
-                        data: mediaBase64
-                    }
-                });
+            if (mediaUrl) {
+                currentParts.push({ mediaUrl, mediaType });
             }
             
-            let finalText = text || "Please process attached file.";
-            if (file) finalText += " [Attached: " + file.name + "]";
-            currentParts.push({ text: finalText });
+            if (text) {
+                currentParts.push({ text: text });
+            }
 
             input.value = '';
             fileInput.value = '';
@@ -353,8 +393,8 @@ app.get('/', (req, res) => {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         message: text,
-                        media: mediaBase64,
-                        mimeType,
+                        mediaUrl,
+                        mediaType,
                         history: historyToSend,
                         isOwnerMode,
                         clientId
@@ -439,7 +479,7 @@ app.post('/clear-chat', async (req, res) => {
 
 app.post('/chat', async (req, res) => {
     try {
-        const { message, media, mimeType, history, isOwnerMode, clientId } = req.body;
+        const { message, mediaUrl, mediaType, history, isOwnerMode, clientId } = req.body;
         const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
 
         if (!apiKey) {
@@ -488,7 +528,7 @@ app.post('/chat', async (req, res) => {
                 tasks.push(executeCodeInSandbox('python', codeToRun).then(res => res ? "\n[Sandbox Execution Output]:\n" + res + "\n" : ""));
             }
 
-            // AI Powered Smart Web Search via SerpApi with explicit Search Failure error handling
+            // AI Powered Smart Web Search via SerpApi
             if (msgLower.match(/search|shearch|serch|latest|news|who is|what is|kauru da|mokak da|liak|leak|kisiwa|gta/)) {
                 tasks.push((async () => {
                     try {
@@ -514,7 +554,6 @@ app.post('/chat', async (req, res) => {
                         }
                     } catch (err) {
                         console.error("Smart search error:", err.message);
-                        // සර්ච් එක වැඩ නැත්නම් හරියටම error එක පෙන්වයි
                         return `\n[Web Search Error]: Search failed or not working: ${err.message}\n`;
                     }
                 })());
@@ -529,16 +568,26 @@ app.post('/chat', async (req, res) => {
         }
 
         const currentParts = [];
-        if (media && mimeType && mimeType.startsWith('image/')) {
-            currentParts.push({
-                inlineData: {
-                    mimeType: mimeType,
-                    data: media
-                }
-            });
+        
+        // Cloudinary Media URL එකෙන් Gemini එකට temporarily Base64 convert කරලා යැවීම
+        if (mediaUrl && mediaType === 'image') {
+            try {
+                const imgFetch = await fetchFn(mediaUrl);
+                const arrayBuffer = await imgFetch.arrayBuffer();
+                const base64Str = Buffer.from(arrayBuffer).toString('base64');
+                const detectedMime = imgFetch.headers.get('content-type') || 'image/jpeg';
+                currentParts.push({
+                    inlineData: {
+                        mimeType: detectedMime,
+                        data: base64Str
+                    }
+                });
+            } catch(e) {
+                console.error("Failed to fetch image from Cloudinary for Gemini:", e.message);
+            }
         }
         
-        let finalText = message || "Please process attached file.";
+        let finalText = message || (mediaUrl ? `[Uploaded ${mediaType}]` : "Please process request.");
         if (additionalContext) finalText += "\n\nFetched System Context:\n" + additionalContext;
 
         currentParts.push({ text: finalText });
@@ -550,11 +599,6 @@ app.post('/chat', async (req, res) => {
             if (Array.isArray(item.content)) {
                 formattedParts = item.content.map(part => {
                     if (part.text) return { text: part.text };
-                    if (part.inlineData) return { inlineData: part.inlineData };
-                    if (part.type === 'text') return { text: part.text };
-                    if (part.type === 'image' && part.source) {
-                        return { inlineData: { mimeType: part.source.media_type, data: part.source.data } };
-                    }
                     return null;
                 }).filter(Boolean);
             } else if (typeof item.content === 'string') {
@@ -618,8 +662,13 @@ app.post('/chat', async (req, res) => {
             aiResponseText = "⚠️ මට හරියටම තේරුණේ නැහැ. කරුණාකර නැවත කියන්න.";
         }
 
+        // Firestore එකට Save කරන්නේ Text එකයි Cloudinary URL එකයි විතරයි
+        let historyParts = [];
+        if (mediaUrl) historyParts.push({ mediaUrl, mediaType });
+        if (message) historyParts.push({ text: message });
+
         let newHistory = [...userHistory];
-        newHistory.push({ role: 'user', content: currentParts });
+        newHistory.push({ role: 'user', content: historyParts });
         newHistory.push({ role: 'model', content: [{ text: aiResponseText }] });
 
         if (newHistory.length > 20) newHistory = newHistory.slice(newHistory.length - 20);
@@ -649,4 +698,3 @@ if (process.env.NODE_ENV !== 'production') {
 }
 
 module.exports = app;
-
