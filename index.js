@@ -348,8 +348,9 @@ app.get('/', (req, res) => {
             const statusTextEl = document.getElementById('text-' + statusId);
             let cycle = 0;
             
-            // Dynamic text updates based on what's happening
+            // Dynamic text updates with Memory Recall included
             let messages = [
+                '🗄️ Recalling Memory...',
                 '🧠 Connecting to Deep Think...',
                 '⚙️ Analyzing Context...',
                 '🧠 Deep Thinking...',
@@ -357,7 +358,7 @@ app.get('/', (req, res) => {
             ];
             
             if (needsWebSearch) {
-                messages.splice(1, 0, '🌐 Querying Live Web Data...', '🔍 Extracting Information...');
+                messages.splice(2, 0, '🌐 Querying Live Web Data...', '🔍 Extracting Information...');
             }
 
             statusTextEl.textContent = messages[0];
@@ -421,7 +422,6 @@ app.get('/', (req, res) => {
             fileInput.value = '';
             document.getElementById('file-name').textContent = '';
 
-            let historyToSend = [...chatHistory];   
             if (!isCmd) {
                 chatHistory.push({ role: 'user', content: currentParts });
                 renderChatBox();
@@ -442,7 +442,6 @@ app.get('/', (req, res) => {
                         message: text,
                         mediaUrl,
                         mediaType,
-                        history: historyToSend,
                         isOwnerMode,
                         clientId
                     })
@@ -537,32 +536,31 @@ app.post('/clear-chat', async (req, res) => {
 
 app.post('/chat', async (req, res) => {
     try {
-        const { message, mediaUrl, mediaType, history, isOwnerMode, clientId } = req.body;
+        const { message, mediaUrl, mediaType, isOwnerMode, clientId } = req.body;
         const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
 
         if (!apiKey) {
-            return res.json({ response: "Backend Error: GEMINI_API_KEY missing in environment variables.", history: history || [], isOwnerMode });
+            return res.json({ response: "Backend Error: GEMINI_API_KEY missing in environment variables.", history: [], isOwnerMode });
         }
 
-        const userHistory = Array.isArray(history) ? history : [];
         const db = getDb();
+        let userHistory = [];
+
+        // 🟢 REAL-TIME MEMORY RECALL FROM FIRESTORE
+        if (db && clientId) {
+            const doc = await db.collection('chats').doc(clientId).get();
+            if (doc.exists) {
+                const data = doc.data();
+                userHistory = isOwnerMode ? (data.ownerHistory || []) : (data.normalHistory || []);
+            }
+        }
 
         if (message && message.trim() === '/owner') {
-            let ownerHist = [];
-            if (db && clientId) {
-                const doc = await db.collection('chats').doc(clientId).get();
-                if (doc.exists && Array.isArray(doc.data().ownerHistory)) ownerHist = doc.data().ownerHistory;
-            }
-            return res.json({ response: "👑 Advanced Developer Privileges Active. Full access granted.", history: ownerHist, isOwnerMode: true });
+            return res.json({ response: "👑 Advanced Developer Privileges Active. Full access granted.", history: userHistory, isOwnerMode: true });
         }
 
         if (message && message.trim() === '/exit') {
-            let normalHist = [];
-            if (db && clientId) {
-                const doc = await db.collection('chats').doc(clientId).get();
-                if (doc.exists && Array.isArray(doc.data().normalHistory)) normalHist = doc.data().normalHistory;
-            }
-            return res.json({ response: "🔒 Exited Developer Mode.", history: normalHist, isOwnerMode: false });
+            return res.json({ response: "🔒 Exited Developer Mode.", history: userHistory, isOwnerMode: false });
         }
 
         let additionalContext = "";
@@ -719,11 +717,10 @@ app.post('/chat', async (req, res) => {
         if (mediaUrl) historyParts.push({ mediaUrl, mediaType });
         if (message) historyParts.push({ text: message });
 
+        // 🟢 UNLIMITED HISTORY - NO AUTOMATIC TRUNCATION
         let newHistory = [...userHistory];
         newHistory.push({ role: 'user', content: historyParts });
         newHistory.push({ role: 'model', content: [{ text: aiResponseText }] });
-
-        if (newHistory.length > 20) newHistory = newHistory.slice(newHistory.length - 20);
 
         if (db && clientId) {
             const updateData = isOwnerMode
@@ -739,7 +736,7 @@ app.post('/chat', async (req, res) => {
         console.error("Chat error:", error.message);
         return res.json({
             response: "Backend Error: " + error.message,
-            history: Array.isArray(req.body.history) ? req.body.history : [],
+            history: [],
             isOwnerMode: req.body.isOwnerMode
         });
     }
