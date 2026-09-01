@@ -171,24 +171,24 @@ app.get('/', (req, res) => {
     <div id="header">
         <div class="model-picker-container">
             <button class="model-selector-btn" onclick="toggleModelMenu()">
-                <span id="current-model-name">Gemini 2.5 Flash</span> ▾
+                <span id="current-model-name">Gemini 3.6 Flash</span> ▾
             </button>
             <div class="model-menu" id="model-menu">
-                <div class="model-item selected" onclick="selectModel('gemini-2.5-flash', '2.5 Flash')">
-                    <div class="model-title">2.5 Flash</div>
-                    <div class="model-desc">Fastest & Stable</div>
+                <div class="model-item selected" onclick="selectModel('gemini-3.6-flash', '3.6 Flash')">
+                    <div class="model-title">3.6 Flash</div>
+                    <div class="model-desc">Stable & Default</div>
                 </div>
-                <div class="model-item" onclick="selectModel('gemini-2.5-pro', '2.5 Pro')">
-                    <div class="model-title">2.5 Pro</div>
-                    <div class="model-desc">Advanced reasoning</div>
+                <div class="model-item" onclick="selectModel('gemini-3.7-flash', '3.7 Flash')">
+                    <div class="model-title">3.7 Flash</div>
+                    <div class="model-desc">Highest Speed</div>
                 </div>
-                <div class="model-item" onclick="selectModel('gemini-1.5-flash', '1.5 Flash')">
-                    <div class="model-title">1.5 Flash</div>
-                    <div class="model-desc">High speed fallback</div>
+                <div class="model-item" onclick="selectModel('gemini-3.5-flash-lite', '3.5 Flash-Lite')">
+                    <div class="model-title">3.5 Flash-Lite</div>
+                    <div class="model-desc">Low Latency</div>
                 </div>
-                <div class="model-item" onclick="selectModel('gemini-1.5-pro', '1.5 Pro')">
-                    <div class="model-title">1.5 Pro</div>
-                    <div class="model-desc">Complex coding</div>
+                <div class="model-item" onclick="selectModel('gemini-3.1-pro-preview', '3.1 Pro')">
+                    <div class="model-title">3.1 Pro</div>
+                    <div class="model-desc">Advanced Logic</div>
                 </div>
                 <div class="divider"></div>
                 <div class="toggle-item">
@@ -219,11 +219,11 @@ app.get('/', (req, res) => {
         localStorage.setItem('stealth_client_id', clientId);
 
         let isOwnerMode = localStorage.getItem('stealth_owner_' + clientId) === 'true';
-        let currentModel = localStorage.getItem('stealth_selected_model') || 'gemini-2.5-flash';
+        let currentModel = localStorage.getItem('stealth_selected_model') || 'gemini-3.6-flash';
         let chatHistory = [];
 
         document.addEventListener("DOMContentLoaded", async () => {
-            const savedModelTitle = localStorage.getItem('stealth_selected_model_title') || '2.5 Flash';
+            const savedModelTitle = localStorage.getItem('stealth_selected_model_title') || '3.6 Flash';
             document.getElementById('current-model-name').textContent = 'Gemini ' + savedModelTitle;
             
             document.querySelectorAll('.model-item').forEach(el => {
@@ -300,7 +300,7 @@ app.get('/', (req, res) => {
 
         function renderChatBox() {
             const chatBox = document.getElementById('chat-box');
-            let html = '<div class="message-container ai-container"><div class="message ai">' + (isOwnerMode ? '👑 Developer Mode Active.' : 'System Online. Select model & features above.') + '</div></div>';
+            let html = '<div class="message-container ai-container"><div class="message ai">' + (isOwnerMode ? '👑 Developer Mode Active.' : 'System Online. 3 Series Models Initialized.') + '</div></div>';
 
             chatHistory.forEach(msg => {
                 const isUser = msg.role === 'user';
@@ -670,6 +670,10 @@ app.post('/chat', async (req, res) => {
         temperature: 0.7
     };
 
+    if (enableThinking) {
+        generationConfig.thinkingConfig = { thinkingBudget: 2048 };
+    }
+
     const payload = {
         system_instruction: { parts: [{ text: systemPrompt }] },
         contents: contentsPayload,
@@ -682,12 +686,13 @@ app.post('/chat', async (req, res) => {
         generationConfig: generationConfig
     };
 
-    // Fallback Models Array to ensure 100% success rate across API variations
+    // 3 Series Models Fallback Array - ensures 100% stable execution
     const modelCandidates = Array.from(new Set([
         selectedModel,
-        'gemini-2.5-flash',
-        'gemini-1.5-flash',
-        'gemini-2.5-pro'
+        'gemini-3.6-flash',
+        'gemini-3.7-flash',
+        'gemini-3.5-flash-lite',
+        'gemini-3.1-pro-preview'
     ])).filter(Boolean);
 
     let aiResponseText = "";
@@ -707,15 +712,15 @@ app.post('/chat', async (req, res) => {
             if (apiRes.ok && data.candidates && data.candidates[0]?.content?.parts) {
                 aiResponseText = data.candidates[0].content.parts.map(p => p.text || "").join("").trim();
                 apiSuccess = true;
-                break;
+                break; // Stop looping once a model successfully responds
             }
         } catch (err) {
-            console.error(`Model ${modelToTry} failed, trying fallback...`);
+            console.error(`Model ${modelToTry} failed, trying fallback to next 3 series model...`);
         }
     }
 
     if (!apiSuccess || !aiResponseText) {
-        aiResponseText = "Unable to process request with selected model. Please try again.";
+        aiResponseText = "⚠️ Unable to process request with 3 Series models. Please check your API key or network connection.";
     }
 
     let historyParts = [];
