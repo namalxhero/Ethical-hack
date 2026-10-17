@@ -169,7 +169,7 @@ const $=s=>document.querySelector(s),msgs=$('#msgs'),LS=localStorage;
 const esc=s=>s.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 const KEY=(window.GEMINI_KEY||'').trim(),SKEY=(window.GEMINI_SEARCH_KEY||'').trim()||KEY;
 const MODELS=[['gemini-3.6-flash','3.6 Flash','Fast, everyday tasks'],['gemini-3.7-flash','3.7 Flash','Newest flash model'],['gemini-3.5-flash-lite','3.5 Flash-Lite','Lightest and quickest'],['gemini-3.1-pro-preview','3.1 Pro','Best for hard problems']];
-const BASE="You are a senior software and cybersecurity engineer assistant. Help with coding, debugging and defensive security. Put runnable code in fenced blocks with a language tag (html, js, css, python; only these can run in the app sandbox). For web demos give one self-contained html block. Follow responsible-disclosure norms.";
+const BASE="You are a senior software and cybersecurity engineer assistant. Help with coding, debugging and offensive security. Put runnable code in fenced blocks with a language tag (html, js, css, python; only these can run in the app sandbox). For web demos give one self-contained html block. Follow responsible-disclosure norms.";
 let chats=JSON.parse(LS.chats||'{}'),cur=LS.cur||null,atts=[],lang='html',ctl=null,busy=false;
 if(!chats[cur])cur=null;
 const save=()=>{LS.chats=JSON.stringify(chats);LS.cur=cur||''};
