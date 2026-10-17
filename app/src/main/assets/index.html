@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Cyber AI</title>
+<script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+:root{--bg:#07080d;--p:#10131c;--p2:#181c2a;--b:#242a3d;--t:#e8ecf8;--m:#8c95b3;--a:#7c5cff;--a2:#00e5c3;--r:18px}
+*{box-sizing:border-box;margin:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{background:radial-gradient(800px 460px at 0 -10%,#1d1546,transparent 60%),radial-gradient(600px 380px at 100% 0,#053a35,transparent 55%),var(--bg);color:var(--t);font:15px/1.6 system-ui,sans-serif;display:flex;flex-direction:column;overflow:hidden}
+svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+button,select,input{font:inherit;color:var(--t)}
+.ib{background:none;border:0;padding:8px;border-radius:12px;color:var(--m);display:grid;place-items:center}
+.ib:active{background:var(--p2);color:var(--t)}
+header{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid #ffffff10}
+.logo{width:26px;height:26px;border-radius:9px;background:linear-gradient(135deg,var(--a),var(--a2));box-shadow:0 0 16px #7c5cff77}
+h1{font-size:15px;flex:1;font-weight:650}
+main{flex:1;display:flex;min-height:0;position:relative}
+#chat{flex:1;display:flex;flex-direction:column;min-width:0}
+#msgs{flex:1;overflow-y:auto;padding:16px 12px;display:flex;flex-direction:column;gap:16px}
+#hero{margin:auto;text-align:center;padding:20px}
+.orb{width:74px;height:74px;border-radius:50%;margin:0 auto 18px;background:conic-gradient(from 0deg,var(--a),var(--a2),var(--a));filter:blur(.3px);box-shadow:0 0 50px #7c5cff88;animation:sp 8s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+#hero h2{font-size:24px;background:linear-gradient(90deg,#fff,#a99bff);-webkit-background-clip:text;color:transparent}
+#hero p{color:var(--m);margin:6px 0 18px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
+.chip{background:var(--p);border:1px solid var(--b);border-radius:20px;padding:8px 14px;font-size:13px}
+.chip:active{border-color:var(--a)}
+.row{max-width:780px;width:100%;margin:0 auto;display:flex;gap:10px}
+.av{width:28px;height:28px;border-radius:9px;flex:none;background:linear-gradient(135deg,var(--a),var(--a2))}
+.bub{min-width:0;flex:1;overflow-wrap:anywhere}
+.row.u{justify-content:flex-end}
+.row.u .bub{flex:none;max-width:88%;background:linear-gradient(135deg,#2c2074,#15314d);border:1px solid #3b3590;padding:10px 14px;border-radius:var(--r) var(--r) 4px var(--r)}
+.bub p{margin:6px 0}.bub a{color:var(--a2)}.bub ul,.bub ol{padding-left:22px}
+.bub :not(pre)>code{background:var(--p2);padding:1px 6px;border-radius:6px;font-size:13px}
+.cur::after{content:"▍";color:var(--a2);animation:bl 1s infinite}@keyframes bl{50%{opacity:0}}
+.att{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px}
+.ac{display:flex;align-items:center;gap:6px;background:#ffffff14;border-radius:10px;padding:4px 8px;font-size:12px;max-width:200px}
+.ac img{width:30px;height:30px;object-fit:cover;border-radius:6px}.ac span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cb{margin:10px 0;border:1px solid var(--b);border-radius:14px;overflow:hidden;background:#080a11}
+.cb .bar{display:flex;gap:8px;align-items:center;padding:6px 8px 6px 12px;background:var(--p2);font-size:12px;color:var(--m)}
+.cb .bar span{flex:1}
+.cb .bar button{background:#ffffff12;border:0;border-radius:8px;padding:4px 10px;font-size:12px}
+.cb .bar .go{background:linear-gradient(135deg,var(--a),#5a3df0)}
+pre{padding:12px;overflow-x:auto;font:13px/1.5 ui-monospace,monospace}
+.dots{display:inline-flex;gap:4px;padding:8px 0}.dots i{width:7px;height:7px;border-radius:50%;background:var(--a2);animation:b 1s infinite}.dots i:nth-child(2){animation-delay:.15s}.dots i:nth-child(3){animation-delay:.3s}
+@keyframes b{50%{transform:translateY(-5px);opacity:.4}}
+#dock{padding:6px 12px calc(10px + env(safe-area-inset-bottom));max-width:804px;width:100%;margin:0 auto;position:relative}
+#chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px}
+#chips .ac{background:var(--p2);border:1px solid var(--b)}
+#chips .ac b{cursor:pointer;color:var(--m);padding-left:4px}
+#box{display:flex;align-items:flex-end;gap:4px;background:var(--p);border:1px solid var(--b);border-radius:24px;padding:6px}
+#box:focus-within{border-color:var(--a)}
+#q{flex:1;resize:none;background:none;border:0;outline:none;color:var(--t);font:inherit;padding:9px 4px;max-height:140px;height:40px}
+#send{width:40px;height:40px;border-radius:50%;border:0;background:linear-gradient(135deg,var(--a),var(--a2));color:#04120f;display:grid;place-items:center;flex:none}
+#send svg{stroke-width:2.6}
+#menu{position:absolute;bottom:68px;left:12px;background:var(--p2);border:1px solid var(--b);border-radius:16px;padding:6px;display:none;box-shadow:0 12px 30px #000a;z-index:5}
+#menu.on{display:block}
+#menu button{display:flex;gap:12px;align-items:center;width:100%;background:none;border:0;padding:11px 16px;border-radius:12px;text-align:left}
+#menu button:active{background:#ffffff12}
+#sb{width:46%;max-width:640px;display:none;flex-direction:column;border-left:1px solid var(--b);background:var(--p)}
+#sb.on{display:flex}
+.tabs{display:flex;gap:6px;padding:8px;border-bottom:1px solid var(--b);align-items:center}
+.tabs button{background:var(--p2);border:1px solid var(--b);border-radius:10px;padding:6px 12px;font-size:13px}
+.tabs button.on{background:var(--a);border-color:var(--a)}
+.tabs .sp{flex:1}
+.pane{flex:1;min-height:0;display:none}.pane.on{display:flex;flex-direction:column}
+#pv{flex:1;border:0;background:#fff;width:100%}
+#code{flex:1;width:100%;background:#080a11;color:#cfe;border:0;padding:12px;font:13px/1.5 ui-monospace,monospace;resize:none;outline:none}
+#out{flex:1;overflow:auto;background:#080a11;padding:10px 12px;font:13px/1.5 ui-monospace,monospace;white-space:pre-wrap;word-break:break-all}
+#out .c{color:#7c8bff}#out .e{color:#ff7b8b}#out .o{color:#cfe}
+#cmd{display:flex;align-items:center;gap:8px;background:#0c0f18;border-top:1px solid var(--b);padding:8px 12px calc(8px + env(safe-area-inset-bottom))}
+#cmd b{color:var(--a2);font-family:ui-monospace,monospace}
+#cmd input{flex:1;background:none;border:0;outline:none;font:13px ui-monospace,monospace}
+#modal{position:fixed;inset:0;background:#000b;display:none;place-items:center;z-index:20;padding:20px}
+#modal.on{display:grid}
+.card{background:var(--p);border:1px solid var(--b);border-radius:22px;padding:20px;width:100%;max-width:420px}
+.card h3{margin-bottom:14px}.card label{display:block;font-size:12px;color:var(--m);margin:12px 0 5px}
+.card input,.card select{width:100%;background:var(--bg);border:1px solid var(--b);border-radius:12px;padding:11px 12px;outline:none}
+.card input:focus{border-color:var(--a)}
+.btns{display:flex;gap:8px;margin-top:18px}
+.btns button{flex:1;border-radius:12px;padding:11px;border:1px solid var(--b);background:var(--p2)}
+.btns .pri{background:linear-gradient(135deg,var(--a),#5a3df0);border:0}
+.note{font-size:12px;color:var(--m);margin-top:10px}
+@media(max-width:800px){#sb{position:fixed;inset:0;width:100%;max-width:none;z-index:9;padding-top:env(safe-area-inset-top)}header{padding-top:calc(8px + env(safe-area-inset-top))}}
+</style></head><body>
+<header><div class="logo"></div><h1>Cyber AI</h1>
+<button class="ib" id="new" title="New chat"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+<button class="ib" id="gear" title="Settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3h0a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5h0a1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8v0a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button></header>
+<main>
+<section id="chat">
+<div id="msgs"><div id="hero"><div class="orb"></div><h2>What are we building?</h2><p>Chat, attach files, run code in the sandbox.</p>
+<div class="chips"><button class="chip">Build a snake game in HTML</button><button class="chip">Python script to sort a CSV</button><button class="chip">Explain SQL injection defence</button><button class="chip">Review my code (attach zip)</button></div></div></div>
+<div id="dock"><div id="menu">
+<button data-k="image"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/></svg>Image</button>
+<button data-k="video"><svg viewBox="0 0 24 24"><rect x="2" y="5" width="14" height="14" rx="3"/><path d="m22 8-6 4 6 4z"/></svg>Video</button>
+<button data-k="file"><svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>File / ZIP</button></div>
+<div id="chips"></div>
+<div id="box"><button class="ib" id="plus"><svg viewBox="0 0 24 24"><path d="m21 11-9.5 9.5a5.5 5.5 0 0 1-7.8-7.8L13 3.4a3.7 3.7 0 0 1 5.2 5.3l-9.4 9.4a1.8 1.8 0 0 1-2.6-2.6l8.5-8.5"/></svg></button>
+<textarea id="q" rows="1" placeholder="Message Cyber AI"></textarea>
+<button id="send"><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button></div></div>
+<input type="file" id="fi" multiple hidden></section>
+<aside id="sb"><div class="tabs"><button data-t="pvp" class="on">Preview</button><button data-t="cp">Code</button><button data-t="cn">Terminal</button><span class="sp"></span><button id="runb">▶ Run</button><button class="ib" id="close"><svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>
+<div class="pane on" id="pvp"><iframe id="pv" sandbox="allow-scripts"></iframe></div>
+<div class="pane" id="cp"><textarea id="code" spellcheck="false"></textarea></div>
+<div class="pane" id="cn"><div id="out"></div><div id="cmd"><b>$</b><input id="ci" placeholder="help" autocapitalize="off" autocomplete="off" spellcheck="false"></div></div></aside>
+</main>
+<div id="modal"><div class="card"><h3>Settings</h3>
+<label>Gemini API key</label><input id="sk" type="password" placeholder="AIza..." autocomplete="off">
+<label>Model</label><select id="sm"><option value="gemini-3.6-flash">3.6 Flash</option><option value="gemini-3.7-flash">3.7 Flash</option><option value="gemini-3.5-flash-lite">3.5 Flash-Lite</option><option value="gemini-3.1-pro-preview">3.1 Pro</option></select>
+<p class="note">Key phone eke witharai save wenawa. Get one at aistudio.google.com/apikey</p>
+<div class="btns"><button id="mc">Cancel</button><button class="pri" id="ms">Save</button></div></div></div>
+<script>
+const $=s=>document.querySelector(s),msgs=$('#msgs'),LS=localStorage;
+const esc=s=>s.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const SYS="You are a senior software and cybersecurity engineer assistant. Help with coding, debugging and defensive security. Put runnable code in fenced blocks with a language tag (html, js, python, bash). For web demos give one self-contained html block. Follow responsible-disclosure norms.";
+let hist=JSON.parse(LS.hist||'[]'),atts=[],lang='html',ctl=null,busy=false;
+/* settings */
+const modal=$('#modal');
+$('#gear').onclick=()=>{$('#sk').value=LS.gkey||'';$('#sm').value=LS.gmodel||'gemini-3.6-flash';modal.classList.add('on')};
+$('#mc').onclick=()=>modal.classList.remove('on');
+$('#ms').onclick=()=>{LS.gkey=$('#sk').value.trim();LS.gmodel=$('#sm').value;modal.classList.remove('on')};
+/* ui helpers */
+function copy(t){try{const a=document.createElement('textarea');a.value=t;document.body.appendChild(a);a.select();document.execCommand('copy');a.remove()}catch(e){}}
+function row(cls){$('#hero')&&$('#hero').remove();const r=document.createElement('div');r.className='row '+cls;r.innerHTML=(cls=='a'?'<div class="av"></div>':'')+'<div class="bub"></div>';msgs.appendChild(r);return r.querySelector('.bub')}
+function scroll(){msgs.scrollTop=msgs.scrollHeight}
+function decorate(el){
+  el.querySelectorAll('pre').forEach(pre=>{
+    const c=pre.querySelector('code');if(!c)return;
+    const l=((c.className.match(/language-(\w+)/)||[])[1]||'text').toLowerCase(),src=c.textContent;
+    const w=document.createElement('div');w.className='cb';
+    w.innerHTML='<div class="bar"><span>'+esc(l)+'</span><button class="cp">Copy</button>'+(l!='text'?'<button class="go">▶ Run</button>':'')+'</div>';
+    pre.replaceWith(w);w.appendChild(pre);
+    w.querySelector('.cp').onclick=e=>{copy(src);e.target.textContent='✓'};
+    const g=w.querySelector('.go');if(g)g.onclick=()=>runCode({py:'python',sh:'bash',shell:'bash',javascript:'js'}[l]||l,src);
+  });
+}
+function attHtml(list){return '<div class="att">'+list.map(a=>'<div class="ac">'+(a.kind=='image'?'<img src="data:'+a.mime+';base64,'+a.data+'">':'<svg viewBox="0 0 24 24" style="width:16px"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/></svg>')+'<span>'+esc(a.name)+'</span></div>').join('')+'</div>'}
+/* attach */
+$('#plus').onclick=e=>{e.stopPropagation();$('#menu').classList.toggle('on')};
+document.addEventListener('click',()=>$('#menu').classList.remove('on'));
+document.querySelectorAll('#menu button').forEach(b=>b.onclick=()=>{
+  const k=b.dataset.k;$('#fi').accept=k=='image'?'image/*':k=='video'?'video/*':'*/*';$('#fi').click()});
+const TXT=/\.(js|ts|jsx|tsx|py|json|md|txt|html|css|java|c|cpp|h|go|rb|php|xml|yml|yaml|sh|gradle|kt|swift|sql|log|csv|toml|ini)$/i;
+function b64(f){return new Promise(r=>{const x=new FileReader();x.onload=()=>r(x.result.split(',')[1]);x.readAsDataURL(f)})}
+$('#fi').onchange=async e=>{
+  for(const f of e.target.files){
+    try{
+      if(f.type.startsWith('image/')||f.type.startsWith('video/')){
+        if(f.size>14e6){alert(f.name+' is too big (max ~14MB)');continue}
+        atts.push({name:f.name,kind:f.type.startsWith('image/')?'image':'video',mime:f.type,data:await b64(f)});
+      }else if(/\.zip$/i.test(f.name)){
+        const z=await JSZip.loadAsync(f);let t='',n=0;
+        for(const p of Object.keys(z.files)){const zf=z.files[p];if(zf.dir||!TXT.test(p)||t.length>6e4)continue;t+='\n----- FILE: '+p+' -----\n'+(await zf.async('string')).slice(0,6e4-t.length);n++}
+        atts.push({name:f.name,kind:'text',text:'[ZIP '+f.name+' - '+n+' files read]'+t});
+      }else atts.push({name:f.name,kind:'text',text:'[File '+f.name+']\n'+(await f.text()).slice(0,6e4)});
+    }catch(x){alert('Could not read '+f.name)}
+  }
+  e.target.value='';chipsRender();
+};
+function chipsRender(){const c=$('#chips');c.innerHTML='';atts.forEach((a,i)=>{const d=document.createElement('div');d.className='ac';d.innerHTML=(a.kind=='image'?'<img src="data:'+a.mime+';base64,'+a.data+'">':'')+'<span>'+esc(a.name)+'</span><b>✕</b>';d.querySelector('b').onclick=()=>{atts.splice(i,1);chipsRender()};c.appendChild(d)})}
+/* sandbox */
+function tab(id){document.querySelectorAll('.pane').forEach(p=>p.classList.toggle('on',p.id==id));document.querySelectorAll('.tabs [data-t]').forEach(b=>b.classList.toggle('on',b.dataset.t==id))}
+document.querySelectorAll('.tabs [data-t]').forEach(b=>b.onclick=()=>tab(b.dataset.t));
+$('#close').onclick=()=>$('#sb').classList.remove('on');
+function tp(t,c){const d=document.createElement('div');d.className=c||'o';d.textContent=t;$('#out').appendChild(d);$('#out').scrollTop=1e9}
+addEventListener('message',e=>{if(e.data&&e.data.__log!=null)tp(e.data.__log,e.data.e?'e':'o')});
+const hook='<script>["log","info","warn","error"].forEach(k=>{console[k]=(...a)=>parent.postMessage({__log:a.map(x=>typeof x=="object"?JSON.stringify(x):String(x)).join(" "),e:k=="error"},"*")});onerror=m=>parent.postMessage({__log:String(m),e:1},"*");addEventListener("message",e=>{if(e.data&&e.data.__eval){try{console.log(eval(e.data.__eval))}catch(x){console.error(x)}}})<\/script>';
+async function pist(l,code){
+  try{const r=await fetch('https://emkc.org/api/v2/piston/execute',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({language:l,version:'*',files:[{content:code}]})});
+  const d=await r.json();return (d.run&&(d.run.output||d.run.stderr))||d.message||'(no output)'}catch(e){return 'error: '+e.message}
+}
+async function runCode(l,code){
+  $('#sb').classList.add('on');$('#code').value=code;lang=l;
+  if(['html','js','css'].includes(l)){
+    $('#pv').srcdoc=l=='html'?hook+code:l=='css'?hook+'<style>'+code+'</style><h1>CSS preview</h1><p>Sample text</p>':hook+'<body><script>'+code+'<\/script>';
+    tab('pvp');
+  }else{tab('cn');tp('$ run '+l,'c');tp(await pist(l,code))}
+}
+$('#runb').onclick=()=>runCode(lang,$('#code').value);
+$('#ci').addEventListener('keydown',async e=>{
+  if(e.key!='Enter')return;const v=e.target.value.trim();e.target.value='';if(!v)return;tp('$ '+v,'c');
+  if(v=='clear'){$('#out').innerHTML='';return}
+  if(v=='help'){tp('help | clear | js <expr> (runs in preview) | py <code> | node <code> | any other text = bash (remote sandbox)');return}
+  if(v.startsWith('js '))return $('#pv').contentWindow.postMessage({__eval:v.slice(3)},'*');
+  if(v.startsWith('py '))return tp(await pist('python',v.slice(3)));
+  if(v.startsWith('node '))return tp(await pist('javascript',v.slice(5)));
+  tp(await pist('bash',v));
+});
+/* chat */
+const ARROW=$('#send').innerHTML,STOP='<svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/></svg>';
+function setBusy(b){busy=b;$('#send').innerHTML=b?STOP:ARROW}
+async function send(){
+  if(busy){ctl&&ctl.abort();return}
+  const t=$('#q').value.trim();if(!t&&!atts.length)return;
+  if(!LS.gkey){const a=row('a');a.textContent='⚙ Settings eke Gemini API key eka danna.';return}
+  $('#q').value='';$('#q').style.height='40px';
+  const sent=atts.slice();atts=[];chipsRender();
+  const u=row('u');u.innerHTML=(sent.length?attHtml(sent):'')+'<div></div>';u.lastChild.textContent=t;
+  const parts=sent.filter(a=>a.data).map(a=>({inlineData:{mimeType:a.mime,data:a.data}}));
+  parts.push({text:(t||'Please look at the attached file(s).')+sent.filter(a=>a.text).map(a=>'\n\n'+a.text).join('')});
+  const note=(t||'(attachment)')+(sent.length?' ['+sent.map(a=>a.name).join(', ')+']':'');
+  const a=row('a');a.innerHTML='<span class="dots"><i></i><i></i><i></i></span>';scroll();
+  const contents=[...hist,{role:'user',parts}];let txt='',raf=0;ctl=new AbortController();setBusy(true);
+  const paint=()=>{raf=0;a.innerHTML=marked.parse(txt);a.classList.add('cur');scroll()};
+  try{
+    const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+(LS.gmodel||'gemini-3.6-flash')+':streamGenerateContent?alt=sse&key='+LS.gkey,{method:'POST',signal:ctl.signal,headers:{'Content-Type':'application/json'},body:JSON.stringify({system_instruction:{parts:[{text:SYS}]},contents,generationConfig:{maxOutputTokens:8192}})});
+    if(!r.ok){const d=await r.json().catch(()=>({}));throw new Error((d.error&&d.error.message)||('HTTP '+r.status))}
+    const rd=r.body.getReader(),dec=new TextDecoder();let buf='';
+    for(;;){const {done,value}=await rd.read();if(done)break;buf+=dec.decode(value,{stream:true});const ls=buf.split('\n');buf=ls.pop();
+      for(const l of ls){if(!l.startsWith('data:'))continue;try{const j=JSON.parse(l.slice(5));const p=j.candidates&&j.candidates[0]&&j.candidates[0].content&&j.candidates[0].content.parts;if(p)txt+=p.map(x=>x.text||'').join('')}catch(_){}}
+      if(!raf)raf=requestAnimationFrame(paint)}
+  }catch(e){if(e.name!='AbortError')txt+=(txt?'\n\n':'')+'⚠️ '+e.message}
+  cancelAnimationFrame(raf);a.classList.remove('cur');a.innerHTML=marked.parse(txt||'…');decorate(a);scroll();
+  if(txt&&!txt.startsWith('⚠️')){hist=[...hist,{role:'user',parts:[{text:note}]},{role:'model',parts:[{text:txt}]}].slice(-40);LS.hist=JSON.stringify(hist)}
+  setBusy(false);ctl=null;
+}
+$('#send').onclick=send;
+$('#q').addEventListener('input',e=>{e.target.style.height='40px';e.target.style.height=Math.min(e.target.scrollHeight,140)+'px'});
+document.querySelectorAll('.chip').forEach(c=>c.onclick=()=>{$('#q').value=c.textContent;$('#q').focus()});
+$('#new').onclick=()=>{LS.hist='[]';location.reload()};
+hist.forEach(m=>{const b=row(m.role=='user'?'u':'a');if(m.role=='user')b.textContent=m.parts[0].text;else{b.innerHTML=marked.parse(m.parts[0].text);decorate(b)}});
+scroll();
+</script></body></html>
