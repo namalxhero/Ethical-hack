@@ -12,6 +12,11 @@ jobs:
         with: { distribution: temurin, java-version: '17' }
       - uses: gradle/actions/setup-gradle@v4
         with: { gradle-version: '8.7' }
+      - name: Inject API key from secrets
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_SEARCH_KEY: ${{ secrets.GEMINI_SEARCH_KEY }}
+        run: printf "window.GEMINI_KEY='%s';\nwindow.GEMINI_SEARCH_KEY='%s';\n" "$GEMINI_API_KEY" "$GEMINI_SEARCH_KEY" > app/src/main/assets/config.js
       - run: gradle assembleDebug --no-daemon
       - uses: actions/upload-artifact@v4
         with:

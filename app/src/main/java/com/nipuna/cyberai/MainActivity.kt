@@ -45,7 +45,7 @@ class MainActivity : Activity() {
 
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
-        web.evaluateJavascript("(function(){var m=document.getElementById('modal'),s=document.getElementById('sb');if(m.classList.contains('on')){m.classList.remove('on');return 1}if(s.classList.contains('on')){s.classList.remove('on');return 1}return 0})()") { r ->
+        web.evaluateJavascript("(window.goBack?goBack():0)") { r ->
             if (r != "1") super.onBackPressed()
         }
     }

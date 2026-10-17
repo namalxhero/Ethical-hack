@@ -1,6 +1,5 @@
 # Cyber AI (Android APK)
-1. Me files okkoma GitHub repo ekakata push karanna (main branch).
-2. Actions tab -> "Build APK" run wenawa (nathnam Run workflow).
-3. Iwara unama Artifacts -> CyberAI-debug-apk download karala install karanna.
-4. App eke Settings walata gihin Gemini API key eka danna.
-Terminal (sandbox): bash/py/node commands run wenne remote Piston sandbox eke (phone eke nemei).
+1. Files okkoma GitHub repo ekakata push karanna (main).
+2. Settings > Secrets > Actions: GEMINI_API_KEY (chat) ha GEMINI_SEARCH_KEY (web search) secrets danna.
+3. Actions > Build APK iwara unama Artifacts wala CyberAI-debug-apk download karanna.
+Long paste = TXT chip (tap karala balanna/edit karanna puluwan).
