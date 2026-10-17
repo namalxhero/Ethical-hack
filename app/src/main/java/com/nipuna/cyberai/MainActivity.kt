@@ -16,10 +16,10 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        window.statusBarColor = Color.parseColor("#07080D")
-        window.navigationBarColor = Color.parseColor("#07080D")
+        window.statusBarColor = Color.parseColor("#0A0E13")
+        window.navigationBarColor = Color.parseColor("#0A0E13")
         web = WebView(this)
-        web.setBackgroundColor(Color.parseColor("#07080D"))
+        web.setBackgroundColor(Color.parseColor("#0A0E13"))
         web.settings.javaScriptEnabled = true
         web.settings.domStorageEnabled = true
         web.webViewClient = WebViewClient()
