@@ -44,6 +44,10 @@ class MainActivity : Activity() {
                     p.inputStream.bufferedReader().forEachLine { emit(it) }
                     emit("[shell exited]", true)
                 }.start()
+                val tm = "/data/data/com.termux/files"
+                wr!!.write("export PATH=" + tm + "/usr/bin:\$PATH HOME=" + tm + "/home LD_LIBRARY_PATH=" + tm + "/usr/lib TMPDIR=" + tm + "/usr/tmp\n")
+                wr!!.write("mkdir -p \$HOME/workspace/out 2>/dev/null; cd \$HOME/workspace 2>/dev/null\n")
+                wr!!.flush()
                 emit(if (root) "root shell started" else "shell started")
             } catch (e: Exception) { emit("start failed: " + e.message, true) }
         }
