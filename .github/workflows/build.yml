@@ -16,7 +16,8 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_SEARCH_KEY: ${{ secrets.GEMINI_SEARCH_KEY }}
-        run: printf "window.GEMINI_KEY='%s';\nwindow.GEMINI_SEARCH_KEY='%s';\n" "$GEMINI_API_KEY" "$GEMINI_SEARCH_KEY" > app/src/main/assets/config.js
+          GEEKFLARE_API_KEY: ${{ secrets.GEEKFLARE_API_KEY }}
+        run: printf "window.GEMINI_KEY='%s';\nwindow.GEMINI_SEARCH_KEY='%s';\nwindow.GEEKFLARE_KEY='%s';\n" "$GEMINI_API_KEY" "$GEMINI_SEARCH_KEY" "$GEEKFLARE_API_KEY" > app/src/main/assets/config.js
       - run: gradle assembleDebug --no-daemon
       - uses: actions/upload-artifact@v4
         with:
