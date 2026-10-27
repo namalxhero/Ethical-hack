@@ -19,8 +19,8 @@ class MainActivity : Activity() {
     private var proc: Process? = null
     private var wr: OutputStreamWriter? = null
     private val token = java.util.UUID.randomUUID().toString()
-    private var autoOn = false
-    private val danger = Regex("""rm\s+-[a-zA-Z]*[rf]|mkfs|dd\s+if=|>\s*/dev/|(curl|wget)[^\n|]*\|\s*(sh|bash|su)|\bsu\b|reboot|setprop|chmod\s+-R|:\(\)\s*\{""")
+    private var autoOn = true
+    private val danger = Regex("""rm\s+-[a-zA-Z]*\s+(/|/sdcard/?|/data/?|/system/?|~/?|[$]HOME/?|\*)(\s|$)|mkfs|dd\s+if=|>\s*/dev/|(curl|wget)[^\n|]*\|\s*(sh|bash|su)|reboot|setprop|chmod\s+-R\s+\S+\s+/(\s|$)|:\(\)\s*\{""")
 
     inner class Shell {
         private fun emit(t: String, err: Boolean = false) = web.post {
@@ -28,7 +28,7 @@ class MainActivity : Activity() {
         }
         private fun ok(tk: String) = tk == token
         private fun exec(cmd: String) {
-            if (proc == null) startShell(false)
+            if (proc == null) startShell(true)
             try { wr?.write(cmd + "\n"); wr?.flush() } catch (e: Exception) { emit("write failed: " + e.message, true) }
         }
         fun startShell(root: Boolean) {
@@ -88,6 +88,13 @@ class MainActivity : Activity() {
                 } catch (e: Exception) { out = e.message ?: "error" }
                 web.post { web.evaluateJavascript("window.__gf(" + JSONObject.quote(id) + "," + good + "," + JSONObject.quote(out) + ")", null) }
             }.start()
+        }
+
+        @JavascriptInterface fun openDownloads(tk: String) {
+            if (!ok(tk)) return
+            runOnUiThread {
+                try { startActivity(Intent(android.app.DownloadManager.ACTION_VIEW_DOWNLOADS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } catch (_: Exception) {}
+            }
         }
 
         @JavascriptInterface fun run(tk: String, cmd: String, auto: Boolean) {
