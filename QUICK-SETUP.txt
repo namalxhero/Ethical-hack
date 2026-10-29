@@ -1,0 +1,246 @@
+================================================================================
+🚀 QUICK SETUP - 5 STEPS (15 MINUTES)
+================================================================================
+
+Follow exactly. Copy-paste ready. 15 minutes start to finish.
+
+================================================================================
+STEP 1: Update AndroidManifest.xml (2 minutes)
+================================================================================
+
+FILE: AndroidManifest.xml
+
+FIND THIS:
+  <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+      package="com.nipuna.cyberai">
+
+AFTER IT, ADD THESE PERMISSIONS:
+
+  <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+  <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+  <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
+  <uses-permission android:name="com.termux.permission.RUN_COMMAND" />
+  <uses-permission android:name="android.permission.INTERNET" />
+  <uses-permission android:name="android.permission.ACCESS_SUPERUSER" />
+
+✅ SAVE and CLOSE
+
+================================================================================
+STEP 2: Add FullAccessUtils.kt (2 minutes)
+================================================================================
+
+LOCATION: app/src/main/java/com/nipuna/cyberai/
+
+ACTION:
+  1. Right-click on: com.nipuna.cyberai package
+  2. Select: New → Kotlin Class
+  3. Name it: FullAccessUtils
+  4. Delete all content
+  5. Copy entire content from: KOTLIN/FullAccessUtils.kt
+  6. Paste into new file
+
+✅ SAVE and CLOSE
+
+================================================================================
+STEP 3: Update MainActivity.kt (6 minutes)
+================================================================================
+
+FILE: MainActivity.kt
+
+PART A: ADD IMPORTS AT TOP
+━━━━━━━━━━━━━━━━━━━━━━━━━
+After existing imports, add:
+
+  import com.nipuna.cyberai.FullAccessUtils
+  import android.os.Build
+
+✅ DONE
+
+PART B: UPDATE onCreate()
+━━━━━━━━━━━━━━━━━━━━━━━━━
+FIND THIS:
+  web.addJavascriptInterface(Shell(), "Android")
+
+AFTER IT, ADD:
+  web.addJavascriptInterface(StorageAccess(), "Storage")
+  web.addJavascriptInterface(TermuxAccess(), "TermuxAPI")
+  
+  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+      FullAccessUtils.requestAllPermissions(this)
+  }
+
+✅ DONE
+
+PART C: ADD INNER CLASSES
+━━━━━━━━━━━━━━━━━━━━━━━━━
+At END of MainActivity class (before last closing brace), add:
+
+COPY ENTIRE CONTENT FROM: KOTLIN/MainActivity-Integration.kt
+
+It has two inner classes:
+  - StorageAccess (with @JavascriptInterface methods)
+  - TermuxAccess (with @JavascriptInterface methods)
+
+Paste everything.
+
+✅ DONE
+
+PART D: ADD onRequestPermissionsResult()
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Also in MainActivity-Integration.kt, find:
+
+  @Deprecated("Deprecated in Java")
+  override fun onRequestPermissionsResult(...)
+
+Copy that entire method and add to MainActivity.
+
+✅ DONE
+
+✅ SAVE MainActivity.kt
+
+================================================================================
+STEP 4: Add JavaScript to index.html (3 minutes)
+================================================================================
+
+FILE: app/src/main/assets/index.html
+
+FIND THIS:
+  </script>
+
+BEFORE IT, ADD ENTIRE CONTENT FROM:
+  JAVASCRIPT/FULL-ACCESS-API.js
+  +
+  JAVASCRIPT/Terminal-Commands.js
+
+(Just copy both files and paste before </script>)
+
+✅ SAVE and CLOSE
+
+================================================================================
+STEP 5: Build & Test (2 minutes)
+================================================================================
+
+BUILD:
+  1. Android Studio → Build menu
+  2. Click: Clean Project
+     (Wait for completion)
+  
+  3. Android Studio → Build menu
+  4. Click: Rebuild Project
+     (Wait for completion)
+
+RUN:
+  1. Click green Play button (or Run → Run 'app')
+  2. Select your device/emulator
+  3. Wait for app to start
+
+GRANT PERMISSIONS:
+  1. App will ask for storage permissions
+  2. Click: Allow/Grant
+  3. App now has full access!
+
+TEST:
+  1. In app, go to Terminal tab
+  2. Type: $ access info
+  
+  SHOULD SEE:
+    🔐 Access Status:
+      Storage: ✅ Full Access
+      Termux: ✅ Available
+
+✅ DONE! Full access working!
+
+================================================================================
+VERIFY EVERYTHING WORKS
+================================================================================
+
+Try these terminal commands:
+
+  $ storage paths
+  (Should show: sdcard, documents, downloads, etc)
+
+  $ termux config
+  (Should show tool availability)
+
+  $ storage list /sdcard
+  (Should list files from SD card)
+
+If all work → YOU'RE DONE! 🎉
+
+================================================================================
+IF SOMETHING DOESN'T WORK
+================================================================================
+
+Check:
+  1. Did you add ALL imports?
+  2. Did you add BOTH inner classes?
+  3. Did you add onRequestPermissionsResult() method?
+  4. Did you add JavaScript before </script>?
+  5. Did you grant permissions?
+  6. Did you rebuild (not just build)?
+
+For more help: See TROUBLESHOOTING.md (in DOCS/ folder)
+
+================================================================================
+SUMMARY
+================================================================================
+
+✅ AndroidManifest.xml → Add permissions
+✅ FullAccessUtils.kt → New file
+✅ MainActivity.kt → Add imports + classes + method
+✅ index.html → Add JavaScript
+✅ Build → Clean + Rebuild
+✅ Test → $ access info
+
+TOTAL TIME: 15 minutes
+
+================================================================================
+FILES TO COPY FROM
+================================================================================
+
+KOTLIN/
+  ├── FullAccessUtils.kt (entire file)
+  ├── MainActivity-Integration.kt (imports + classes + method)
+  └── AndroidManifest.xml (just permissions block)
+
+JAVASCRIPT/
+  ├── FULL-ACCESS-API.js (entire)
+  └── Terminal-Commands.js (entire)
+
+All in copy-paste ready format!
+
+================================================================================
+BACKUP REMINDER
+================================================================================
+
+Before starting:
+  💾 Backup MainActivity.kt
+  💾 Backup AndroidManifest.xml
+  💾 Backup index.html
+
+After building:
+  💾 Backup working project
+
+This way if something goes wrong, you can restore!
+
+================================================================================
+DONE! 🎉
+================================================================================
+
+Your Cyber AI app now has:
+  ✅ Full storage access
+  ✅ Full Termux integration
+  ✅ 30+ file operations
+  ✅ Terminal commands
+  ✅ JavaScript APIs
+  ✅ Permission system
+
+TOTAL TIME: ~30 minutes (including build)
+
+Next? Explore the APIs and commands!
+
+For full documentation: See COMPLETE-GUIDE.md
+
+================================================================================
+Status: ✅ PRODUCTION READY
+Version: 2.0
