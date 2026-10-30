@@ -20,11 +20,18 @@ class MainActivity : Activity() {
     private var wr: OutputStreamWriter? = null
     private val token = java.util.UUID.randomUUID().toString()
     private var autoOn = true
+    private val termBuf = StringBuilder()
     private val danger = Regex("""rm\s+-[a-zA-Z]*\s+(/|/sdcard/?|/data/?|/system/?|~/?|[$]HOME/?|\*)(\s|$)|mkfs|dd\s+if=|>\s*/dev/|(curl|wget)[^\n|]*\|\s*(sh|bash|su)|reboot|setprop|chmod\s+-R\s+\S+\s+/(\s|$)|:\(\)\s*\{""")
 
     inner class Shell {
-        private fun emit(t: String, err: Boolean = false) = web.post {
-            web.evaluateJavascript("window.__sh(" + JSONObject.quote(t) + "," + err + ")", null)
+        private fun emit(t: String, err: Boolean = false) {
+            if (!t.startsWith("__DONE__")) {
+                synchronized(termBuf) {
+                    termBuf.append(if (err) 'E' else 'O').append(t.replace('\n', ' ')).append('\n')
+                    if (termBuf.length > 60000) { termBuf.delete(0, termBuf.length - 40000) }
+                }
+            }
+            web.post { web.evaluateJavascript("window.__sh(" + JSONObject.quote(t) + "," + err + ")", null) }
         }
         private fun ok(tk: String) = tk == token
         private fun exec(cmd: String) {
@@ -45,6 +52,7 @@ class MainActivity : Activity() {
                     emit("[shell exited]", true)
                 }.start()
                 val tm = "/data/data/com.termux/files"
+                wr!!.write("unset LD_PRELOAD; export PREFIX=" + tm + "/usr LANG=en_US.UTF-8 TERM=xterm-256color\n")
                 wr!!.write("export PATH=" + tm + "/usr/bin:\$PATH HOME=" + tm + "/home LD_LIBRARY_PATH=" + tm + "/usr/lib TMPDIR=" + tm + "/usr/tmp\n")
                 wr!!.write("mkdir -p \$HOME/workspace/out 2>/dev/null; cd \$HOME/workspace 2>/dev/null\n")
                 wr!!.flush()
@@ -52,6 +60,9 @@ class MainActivity : Activity() {
             } catch (e: Exception) { emit("start failed: " + e.message, true) }
         }
         fun stopShell() { try { proc?.destroy() } catch (_: Exception) {}; proc = null; wr = null }
+
+        @JavascriptInterface fun storageOk(tk: String): Boolean = ok(tk) && hasAllFiles()
+        @JavascriptInterface fun askStorage(tk: String) { if (ok(tk)) runOnUiThread { askAllFiles() } }
 
         @JavascriptInterface fun start(tk: String, root: Boolean) { if (ok(tk)) startShell(root) }
         @JavascriptInterface fun stop(tk: String) { if (ok(tk)) stopShell() }
@@ -112,6 +123,22 @@ class MainActivity : Activity() {
         }
     }
 
+    private fun hasAllFiles(): Boolean =
+        if (android.os.Build.VERSION.SDK_INT >= 30) android.os.Environment.isExternalStorageManager()
+        else checkSelfPermission(android.Manifest.permission.WRITE_EXTERNAL_STORAGE) == android.content.pm.PackageManager.PERMISSION_GRANTED
+
+    private fun askAllFiles() {
+        try {
+            if (android.os.Build.VERSION.SDK_INT >= 30) {
+                startActivity(Intent(android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, Uri.parse("package:" + packageName)))
+            } else {
+                requestPermissions(arrayOf(android.Manifest.permission.READ_EXTERNAL_STORAGE, android.Manifest.permission.WRITE_EXTERNAL_STORAGE), 2)
+            }
+        } catch (e: Exception) {
+            try { startActivity(Intent(android.provider.Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)) } catch (_: Exception) {}
+        }
+    }
+
     private var chooser: ValueCallback<Array<Uri>>? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -125,6 +152,8 @@ class MainActivity : Activity() {
         web.webViewClient = object : WebViewClient() {
             override fun onPageFinished(v: WebView, url: String?) {
                 v.evaluateJavascript("window.__tk=" + JSONObject.quote(token), null)
+                val snap = synchronized(termBuf) { termBuf.toString() }
+                if (snap.isNotEmpty()) v.evaluateJavascript("window.__restore&&window.__restore(" + JSONObject.quote(snap) + ")", null)
             }
         }
         web.webChromeClient = object : WebChromeClient() {
@@ -137,6 +166,14 @@ class MainActivity : Activity() {
         web.addJavascriptInterface(Shell(), "Android")
         setContentView(web)
         web.loadUrl("file:///android_asset/index.html")
+        try {
+            assets.open("push-to-github.sh").use { i -> java.io.File(filesDir, "push-to-github.sh").outputStream().use { o -> i.copyTo(o) } }
+        } catch (_: Exception) {}
+        val prefs = getSharedPreferences("cfg", MODE_PRIVATE)
+        if (!prefs.getBoolean("askedStorage", false)) {
+            prefs.edit().putBoolean("askedStorage", true).apply()
+            if (!hasAllFiles()) askAllFiles()
+        }
     }
 
     @Deprecated("Deprecated in Java")
